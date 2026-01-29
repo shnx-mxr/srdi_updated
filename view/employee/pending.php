@@ -29,7 +29,8 @@ if ($type_id == 2 && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upda
     $comment = $_POST['comment'] ?? null;
     $complianceFile = null;
 
-    if ($newStatus == 3) { // Revise
+    if ($newStatus === 3) {
+
         if (empty($comment)) {
             $alert = [
                 'icon' => 'error',
@@ -37,54 +38,68 @@ if ($type_id == 2 && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upda
                 'text' => 'Please enter a comment.',
                 'redirect' => 'pending.php'
             ];
+            return;
         }
 
-        if (!isset($_FILES['compliance']) || $_FILES['compliance']['error'] != 0) {
+        if (!isset($_FILES['compliance']) || $_FILES['compliance']['error'] !== 0) {
             $alert = [
                 'icon' => 'error',
                 'title' => 'Compliance Required',
                 'text' => 'Please upload a compliance PDF file.',
                 'redirect' => 'pending.php'
             ];
-        } else {
-            $targetDir = __DIR__ . "/compliance/";
-            if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
-
-            $originalName = basename($_FILES['compliance']['name']);
-            $safeName = preg_replace('/[^A-Za-z0-9_\.-]/', '_', $originalName);
-            $filename = time() . '_' . $safeName;
-            $targetFile = $targetDir . $filename;
-
-            $fileType = mime_content_type($_FILES['compliance']['tmp_name']);
-            if ($fileType != 'application/pdf') {
-                $alert = [
-                    'icon' => 'error',
-                    'title' => 'Invalid File',
-                    'text' => 'Compliance file must be a PDF.',
-                    'redirect' => 'pending.php'
-                ];
-            } elseif (move_uploaded_file($_FILES['compliance']['tmp_name'], $targetFile)) {
-                $complianceFile = $filename;
-            } else {
-                $alert = [
-                    'icon' => 'error',
-                    'title' => 'Upload Failed',
-                    'text' => 'Unable to upload compliance PDF.',
-                    'redirect' => 'pending.php'
-                ];
-            }
+            return;
         }
+
+        $targetDir = __DIR__ . "/compliance/";
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
+
+        $originalName = basename($_FILES['compliance']['name']);
+        $safeName = preg_replace('/[^A-Za-z0-9_.-]/', '_', $originalName);
+        $filename = time() . '_' . $safeName;
+        $targetFile = $targetDir . $filename;
+
+        $fileType = mime_content_type($_FILES['compliance']['tmp_name']);
+        if ($fileType !== 'application/pdf') {
+            $alert = [
+                'icon' => 'error',
+                'title' => 'Invalid File',
+                'text' => 'Compliance file must be a PDF.',
+                'redirect' => 'pending.php'
+            ];
+            return;
+        }
+
+        if (!move_uploaded_file($_FILES['compliance']['tmp_name'], $targetFile)) {
+            $alert = [
+                'icon' => 'error',
+                'title' => 'Upload Failed',
+                'text' => 'Unable to upload compliance PDF.',
+                'redirect' => 'pending.php'
+            ];
+            return;
+        }
+
+        $complianceFile = $filename;
     }
 
-    if (!isset($alert)) {
-        $db->updateResearchStatusExtended($researchId, $newStatus, $user_id, $comment, $complianceFile);
-        $alert = [
-            'icon' => 'success',
-            'title' => 'Updated!',
-            'text' => 'Research status updated successfully.',
-            'redirect' => 'pending.php'
-        ];
-    }
+    // ================= UPDATE STATUS =================
+    $db->updateResearchStatusExtended(
+        $researchId,
+        $newStatus,
+        $user_id,
+        $comment,
+        $complianceFile
+    );
+
+    $alert = [
+        'icon' => 'success',
+        'title' => 'Updated!',
+        'text' => 'Research status updated successfully.',
+        'redirect' => 'pending.php'
+    ];
 }
 
 // Add team leader, decided by names, and type name

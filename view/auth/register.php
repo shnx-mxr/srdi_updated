@@ -56,12 +56,12 @@ if (isset($_POST['submit'])) {
             justify-content: center;
             align-items: center;
             font-family: Arial, sans-serif;
-            background: url('https://images.pexels.com/photos/23884131/pexels-photo-23884131.jpeg') no-repeat center center/cover;
+            background: url('https://cdn.pixabay.com/photo/2022/08/14/01/35/leaves-7384743_1280.jpg') no-repeat center/cover;
         }
 
         .glass {
             width: 400px;
-            padding: 30px;
+            padding: 50px;
             border-radius: 20px;
             background: rgba(255, 255, 255, 0.12);
             backdrop-filter: blur(15px);
@@ -76,12 +76,12 @@ if (isset($_POST['submit'])) {
         }
 
         input {
-            width: 100%;
+            width: 95%;
             padding: 12px;
             margin: 8px 0;
             border-radius: 10px;
             border: none;
-            background: rgba(255, 255, 255, 0.2);
+            background: white;
             color: #fff;
         }
 

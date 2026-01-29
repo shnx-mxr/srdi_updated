@@ -33,6 +33,33 @@ class db
 
         return $result->num_rows > 0;
     }
+    public function getUsersByTypes(array $type_ids)
+    {
+        // Convert array to comma-separated placeholders
+        $placeholders = implode(',', array_fill(0, count($type_ids), '?'));
+        $types = str_repeat('i', count($type_ids));
+
+        $sql = "SELECT id FROM employee WHERE type_id IN ($placeholders)";
+        $stmt = $this->con->prepare($sql);
+
+        if (!$stmt) {
+            die("Prepare failed: " . $this->con->error);
+        }
+
+        // Bind params dynamically
+        $stmt->bind_param($types, ...$type_ids);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        $users = [];
+        while ($row = $result->fetch_assoc()) {
+            $users[] = $row;
+        }
+
+        $stmt->close();
+        return $users;
+    }
+
 
     // Register a new user (NO ROLE)
     public function registerUser($firstname, $middlename, $lastname, $email, $password, $address)
@@ -93,6 +120,29 @@ class db
         $stmt->bind_param("is", $user_id, $message);
 
         return $stmt->execute();
+    }
+    public function getResearchById($research_id)
+    {
+        $stmt = $this->con->prepare("
+        SELECT *
+        FROM research
+        WHERE id = ?
+        LIMIT 1
+    ");
+
+        if (!$stmt) {
+            die("Prepare failed: " . $this->con->error);
+        }
+
+        $stmt->bind_param("i", $research_id);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        $research = $result->fetch_assoc();
+
+        $stmt->close();
+
+        return $research;
     }
 
 
@@ -283,7 +333,7 @@ class db
 
     public function getNotifications($user_id, $limit = 10)
     {
-        $sql = "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?";
+        $sql = "SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT ?";
         $stmt = $this->con->prepare($sql);
         $stmt->bind_param("ii", $user_id, $limit);
         $stmt->execute();
@@ -382,11 +432,11 @@ class db
     {
         if ($type_id == 1) {
             // Type 1 sees only their own research
-            $stmt = $this->con->prepare("SELECT * FROM research WHERE user_id = ? ORDER BY created_at DESC");
+            $stmt = $this->con->prepare("SELECT * FROM research WHERE user_id = ? ORDER BY id DESC");
             $stmt->bind_param("i", $user_id);
         } else {
             // Type 2,3,4 see all research
-            $stmt = $this->con->prepare("SELECT * FROM research ORDER BY created_at DESC");
+            $stmt = $this->con->prepare("SELECT * FROM research ORDER BY id DESC");
         }
 
         $stmt->execute();
@@ -515,9 +565,9 @@ class db
         $status_id = intval($status_id);
         $updatedByUserId = intval($updatedByUserId);
 
-        // Determine status text
         switch ($status_id) {
-            case 2:
+
+            case 2: // Approved
                 $statusText = "Approved";
                 $stmt = $this->con->prepare("
                 UPDATE research 
@@ -525,35 +575,29 @@ class db
                 WHERE id = ?
             ");
                 $stmt->bind_param("iii", $status_id, $updatedByUserId, $research_id);
-                $stmt->execute();
-                $stmt->close();
                 break;
 
-            case 3:
-                $statusText = "Revised"; // Correct wording
+            case 3: // Revised
+                $statusText = "Revised";
                 $stmt = $this->con->prepare("
                 UPDATE research 
                 SET status_id = ?, desisyon_id = ?, comment = ?, compliance = ?, updated_at = NOW()
                 WHERE id = ?
             ");
                 $stmt->bind_param("iissi", $status_id, $updatedByUserId, $comment, $complianceFile, $research_id);
-                $stmt->execute();
-                $stmt->close();
                 break;
 
-            case 4:
-                $statusText = "Rejected"; // Example if you have status_id 4
+            case 4: // Rejected
+                $statusText = "Rejected";
                 $stmt = $this->con->prepare("
                 UPDATE research 
                 SET status_id = ?, desisyon_id = ?, comment = ?, compliance = ?, updated_at = NOW()
                 WHERE id = ?
             ");
                 $stmt->bind_param("iissi", $status_id, $updatedByUserId, $comment, $complianceFile, $research_id);
-                $stmt->execute();
-                $stmt->close();
                 break;
 
-            case 5:
+            case 5: // Published
                 $statusText = "Published";
                 $stmt = $this->con->prepare("
                 UPDATE research 
@@ -561,15 +605,16 @@ class db
                 WHERE id = ?
             ");
                 $stmt->bind_param("iii", $status_id, $updatedByUserId, $research_id);
-                $stmt->execute();
-                $stmt->close();
                 break;
 
             default:
-                return false; // Unknown status
+                return false;
         }
 
-        // Get research info
+        $stmt->execute();
+        $stmt->close();
+
+        // Fetch research info
         $stmt2 = $this->con->prepare("SELECT title, user_id FROM research WHERE id = ?");
         $stmt2->bind_param("i", $research_id);
         $stmt2->execute();
@@ -577,20 +622,23 @@ class db
         $stmt2->close();
 
         $owner = $info['user_id'];
-        $title = stripslashes($info['title']); // Remove any backslashes
-
+        $title = stripslashes($info['title']);
         $updater = $this->getEmployeeName($updatedByUserId);
 
-        $message = "Your research '{$title}' has been {$statusText} by {$updater}.";
+        // Notification message
+        if ($status_id === 3) {
+            $reason = $comment ?: 'required revisions';
+            $message = "Your research must be {$statusText} due to {$reason}, updated by {$updater}.";
+        } else {
+            $message = "Your research '{$title}' has been {$statusText} by {$updater}.";
+        }
 
-        // Insert notification
         $this->insertNotification($owner, $message);
-
-        // Log the action
         $this->insertLog($updatedByUserId, "Updated research '{$title}' to {$statusText}");
 
         return true;
     }
+
 
 
     // Update a specific employee's status
@@ -702,5 +750,17 @@ class db
 
         $stmt->bind_param("sssssi", $firstname, $middlename, $lastname, $email, $address, $id);
         return $stmt->execute();
+    }
+
+    public function addPublicationDetails($research_id, $pub_title, $pub_date, $pub_link, $publisher)
+    {
+        $stmt = $this->con->prepare("UPDATE research SET publication_title = ?, publication_date = ?, publication_link = ?, publisher = ? WHERE id = ?");
+        $stmt->bind_param("ssssi", $pub_title, $pub_date, $pub_link, $publisher, $research_id);
+        return $stmt->execute();
+    }
+
+    public function updatePublicationDetails($research_id, $pub_title, $pub_date, $pub_link, $publisher)
+    {
+        return $this->addPublicationDetails($research_id, $pub_title, $pub_date, $pub_link, $publisher);
     }
 }
