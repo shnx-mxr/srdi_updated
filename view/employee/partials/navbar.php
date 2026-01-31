@@ -50,7 +50,7 @@ $unreadCount = $db->getUnreadNotificationCount($user_id);
                 <?php if ($unreadCount > 0): ?>
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
                         <?= $unreadCount ?>
-                        <span class="visually-hidden">unread notifications</span>
+                        <span class="visibly-hidden">unread notifications</span>
                     </span>
                 <?php endif; ?>
 
@@ -68,7 +68,14 @@ $unreadCount = $db->getUnreadNotificationCount($user_id);
                 <?php if (!empty($notifications)): ?>
                     <?php foreach ($notifications as $notif): ?>
                         <li>
-                            <a class="dropdown-item <?= $notif['status'] == 0 ? 'fw-bold' : '' ?> mb-1" href="#">
+                            <?php 
+                            // 👈 Check kung may redirect_url, kung wala use '#'
+                            $href = !empty($notif['redirect_url']) ? htmlspecialchars($notif['redirect_url']) : '#';
+                            // 👈 Bold if unread
+                            $boldClass = $notif['status'] == 0 ? 'fw-bold' : '';
+                            ?>
+                            <!-- 👈 Changed href from "#" to dynamic $href -->
+                            <a class="dropdown-item <?= $boldClass ?> mb-1" href="<?= $href ?>">
                                 <small class="text-muted"><?= date('M d, Y H:i', strtotime($notif['created_at'])) ?></small><br>
                                 <span><?= htmlspecialchars($notif['message']) ?></span>
                             </a>
@@ -86,7 +93,7 @@ $unreadCount = $db->getUnreadNotificationCount($user_id);
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
                 <li><a class="dropdown-item" href="profile.php">Profile</a></li>
-                <li><a class="dropdown-item" href="http://localhost/srdi_system_v1/view/auth/logout.php">Logout</a></li>
+                <li><a class="dropdown-item" href="http://localhost/srdi_updated/view/auth/logout.php">Logout</a></li>
             </ul>
         </li>
     </ul>

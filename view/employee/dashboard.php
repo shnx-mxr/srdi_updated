@@ -20,7 +20,16 @@ $session_user_id = $_SESSION['user_id'] ?? 0;
 
 $db = new db();
 
-$typeName = $db->getEmployeeTypeName($type_id) ?? 'Unknown Type';
+// 👇 ADD THIS MAPPING
+$typeDisplayNames = [
+    1 => 'Researcher',
+    2 => 'Section Head',
+    3 => 'Division Chief',
+    4 => 'Admin'
+];
+
+// Use the mapping instead of direct DB value
+$typeName = $typeDisplayNames[$type_id] ?? 'Unknown Type';
 
 // Status mapping: change 3 => 'Revision'
 $statusText = [1 => 'Pending', 2 => 'Approved', 3 => 'Revision', 4 => 'Cancelled', 5 => 'Published'];
@@ -42,7 +51,25 @@ if ($type_id == 1) {
     $allResearch = $db->getAllResearch();
     $monthlyCounts = $db->getMonthlyResearchCounts(date('Y'));
 }
+// Determine which research to fetch
+if ($type_id == 1) {
+    $statusCountsRaw = $db->getResearchStatusCounts($session_user_id);
+    $allResearch = $db->getAllResearch($session_user_id);
+    $monthlyCounts = $db->getMonthlyResearchCounts(date('Y'), $session_user_id);
+} else {
+    $statusCountsRaw = $db->getResearchStatusCounts();
+    $allResearch = $db->getAllResearch();
+    $monthlyCounts = $db->getMonthlyResearchCounts(date('Y'));
+}
 
+// 👇 ADD THESE LINES HERE (PAGINATION SETTINGS)
+$itemsPerPage = 10;
+$currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$offset = ($currentPage - 1) * $itemsPerPage;
+
+// Replace 'revised' counts key with 'revision'
+$statusCountsRaw['revision'] = $statusCountsRaw['revised'] ?? 0;
+unset($statusCountsRaw['revised']);
 // Replace 'revised' counts key with 'revision'
 $statusCountsRaw['revision'] = $statusCountsRaw['revised'] ?? 0;
 unset($statusCountsRaw['revised']);
@@ -76,7 +103,7 @@ $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
                 <div class="container-fluid px-4">
                     <h1 class="mt-4">Dashboard</h1>
                     <ol class="breadcrumb mb-4">
-                        <li class="breadcrumb-item active">Hi, <?= htmlspecialchars($typeName) ?>, <?= htmlspecialchars($fullname) ?>!</li>
+            <li class="breadcrumb-item active">Hi, <strong><?= htmlspecialchars($fullname) ?></strong>!</li>
                     </ol>
 
                     <!-- Status Cards -->
@@ -89,75 +116,125 @@ $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
                                     <div class="card-body"><?= ucfirst($key) ?>: <?= $count ?></div>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
+                        <?php endforeach; ?> 
                     </div>
 
-                    <!-- Monthly Chart -->
-                    <div class="card mb-4">
-                        <div class="card-header"><i class="fas fa-chart-line me-1"></i> Monthly Research (<?= date('Y') ?>)</div>
-                        <div class="card-body">
-                            <canvas id="monthlyChart" width="400" height="150"></canvas>
-                        </div>
-                    </div>
+              <!-- Monthly Chart -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-chart-bar me-2"></i> Monthly Research  (<?= date('Y') ?>)
+    </div>
+    <div class="card-body">
+        <canvas id="monthlyChart" height="80"></canvas>
+    </div>
+</div>
 
-                    <!-- Research Table -->
-                    <div class="card mb-4">
-                        <div class="card-header"><i class="fas fa-table me-1"></i> Research List</div>
-                        <div class="card-body table-responsive">
-                            <table class="table table-bordered table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Title</th>
-                                        <th>Description</th>
-                                        <th>File</th>
-                                        <th>Start Date</th>
-                                        <th>End Date</th>
-                                        <th>Member(s)</th>
-                                        <th>Research Leader</th>
-                                        <th>Compliance</th>
-                                        <th>Comment</th>
-                                        <th>Status</th>
-                                        <th>Type</th> <!-- added type column -->
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($allResearch as $r): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($r['title']) ?></td>
-                                            <td><?= htmlspecialchars($r['description']) ?></td>
-                                            <td>
-                                                <?php if (!empty($r['filePath'])): ?>
-                                                    <a href="research/<?= htmlspecialchars($r['filePath']) ?>" target="_blank">View File</a>
-                                                    <?php else: ?>N/A<?php endif; ?>
-                                            </td>
-                                            <td><?= htmlspecialchars($r['startDate']) ?></td>
-                                            <td><?= htmlspecialchars($r['endDate']) ?></td>
-                                            <td><?= htmlspecialchars($r['member']) ?></td>
-                                            <td>
-                                                <?= ($type_id == 1 && $r['user_id'] == $session_user_id)
-                                                    ? 'You'
-                                                    : htmlspecialchars($r['leader_firstname'] . ' ' . $r['leader_lastname']) ?>
-                                            </td>
-                                            <td>
-                                                <?php if (!empty($r['compliance'])): ?>
-                                                    <a href="compliance/<?= htmlspecialchars($r['compliance']) ?>" target="_blank">View PDF</a>
-                                                    <?php else: ?>N/A<?php endif; ?>
-                                            </td>
-                                            <td><?= htmlspecialchars($r['comment']) ?></td>
-                                            <td>
-                                                <?php
-                                                if ($r['status_id'] == 3) echo '<span class="badge bg-info">Revision</span>';
-                                                else echo htmlspecialchars($statusText[$r['status_id']] ?? 'Unknown');
-                                                ?>
-                                            </td>
-                                            <td><?= htmlspecialchars($typeNames[$r['type_id']] ?? 'Unknown') ?></td> <!-- show type -->
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-
-                            </table>
-                        </div>
-                    </div>
+            <!-- Research Table -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-dark text-white">
+        <i class="fas fa-table me-2"></i> Research List
+    </div>
+    <div class="card-body table-responsive">
+        <?php 
+        // Pagination logic
+        $totalResearch = count($allResearch);
+        $totalPages = ceil($totalResearch / $itemsPerPage);
+        $paginatedResearch = array_slice($allResearch, $offset, $itemsPerPage);
+        ?>
+        
+        <table class="table table-hover table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>Title</th>
+                    <th>Description</th>
+                    <th>File</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Member(s)</th>
+                    <th>Research Leader</th>
+                    <th>Compliance</th>
+                    <th>Comment</th>
+                    <th>Status</th>
+                    <th>Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($paginatedResearch as $r): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($r['title']) ?></td>
+                        <td><?= htmlspecialchars($r['description']) ?></td>
+                        <td>
+                            <?php if (!empty($r['filePath'])): ?>
+                                <a href="research/<?= htmlspecialchars($r['filePath']) ?>" target="_blank" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-file-pdf"></i> View
+                                </a>
+                            <?php else: ?>
+                                <span class="text-muted">N/A</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= htmlspecialchars($r['startDate']) ?></td>
+                        <td><?= htmlspecialchars($r['endDate']) ?></td>
+                        <td><?= htmlspecialchars($r['member']) ?></td>
+                        <td>
+                            <?= ($type_id == 1 && $r['user_id'] == $session_user_id)
+                                ? '<span class="badge bg-success">You</span>'
+                                : htmlspecialchars($r['leader_firstname'] . ' ' . $r['leader_lastname']) ?>
+                        </td>
+                        <td>
+                            <?php if (!empty($r['compliance'])): ?>
+                                <a href="compliance/<?= htmlspecialchars($r['compliance']) ?>" target="_blank" class="btn btn-sm btn-info">
+                                    <i class="fas fa-file-pdf"></i> View
+                                </a>
+                            <?php else: ?>
+                                <span class="text-muted">N/A</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= htmlspecialchars($r['comment']) ?></td>
+                        <td>
+                            <?php
+                            if ($r['status_id'] == 3) echo '<span class="badge bg-info">Revision</span>';
+                            else echo '<span class="badge bg-' . ($bgColors[strtolower($statusText[$r['status_id']])] ?? 'secondary') . '">' . htmlspecialchars($statusText[$r['status_id']] ?? 'Unknown') . '</span>';
+                            ?>
+                        </td>
+                        <td><?= htmlspecialchars($typeNames[$r['type_id']] ?? 'Unknown') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        
+        <!-- Pagination Controls -->
+        <?php if ($totalPages > 1): ?>
+            <nav aria-label="Research pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    <!-- Previous Button -->
+                    <li class="page-item <?= $currentPage == 1 ? 'disabled' : '' ?>">
+                        <a class="page-link" href="?page=<?= $currentPage - 1 ?>">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    </li>
+                    
+                    <!-- Page Numbers -->
+                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                        <li class="page-item <?= $i == $currentPage ? 'active' : '' ?>">
+                            <a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
+                        </li>
+                    <?php endfor; ?>
+                    
+                    <!-- Next Button -->
+                    <li class="page-item <?= $currentPage == $totalPages ? 'disabled' : '' ?>">
+                        <a class="page-link" href="?page=<?= $currentPage + 1 ?>">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            
+            <p class="text-center text-muted mt-2 mb-0">
+                Showing <?= $offset + 1 ?> to <?= min($offset + $itemsPerPage, $totalResearch) ?> of <?= $totalResearch ?> entries
+            </p>
+        <?php endif; ?>
+    </div>
+</div>
 
                 </div>
             </main>
@@ -167,31 +244,80 @@ $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        const ctx = document.getElementById('monthlyChart').getContext('2d');
-        const monthlyChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: <?= json_encode($monthLabels) ?>,
-                datasets: [{
-                    label: 'Research Count',
-                    data: <?= json_encode($monthlyData) ?>,
-                    backgroundColor: '#0d6efd',
-                    borderColor: '#0d6efd',
-                    borderWidth: 1
-                }]
+<script>
+    const ctx = document.getElementById('monthlyChart').getContext('2d');
+    
+    // Create gradient for bars
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+    gradient.addColorStop(0, 'rgba(13, 110, 253, 0.8)');
+    gradient.addColorStop(1, 'rgba(13, 110, 253, 0.4)');
+    
+    const monthlyChart = new Chart(ctx, {
+        type: 'bar', // 👈 Changed back to bar
+        data: {
+            labels: <?= json_encode($monthLabels) ?>,
+            datasets: [{
+                label: 'Research Count',
+                data: <?= json_encode($monthlyData) ?>,
+                backgroundColor: gradient,
+                borderColor: '#0d6efd',
+                borderWidth: 2,
+                borderRadius: 8, // 👈 Rounded corners
+                barThickness: 40 // 👈 Bar width
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: {
+                        size: 14
+                    },
+                    bodyFont: {
+                        size: 13
+                    }
+                }
             },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        stepSize: 1
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
                     }
                 }
             }
-        });
-    </script>
+        }
+    });
+</script>
 </body>
 
 </html>

@@ -9,7 +9,7 @@ class db
 
     public function __construct()
     {
-        $this->con = mysqli_connect('localhost', 'root', '', 'srdi_system', 3306);
+        $this->con = mysqli_connect('localhost', 'root', '', 'srdi_updated', 3306);
         if (!$this->con) {
             die("Database connection failed: " . mysqli_connect_error());
         }
@@ -96,31 +96,73 @@ class db
 
         $success = $stmt->execute();
 
-        if ($success) {
-            $userId = $this->con->insert_id;
-            $this->insertLog($userId, 'User registered');
+ if ($success) {
+    $userId = $this->con->insert_id;
+    $this->insertLog($userId, 'User registered');
 
-            // Insert a notification for the new user
-            $this->insertNotification($userId, "Welcome, $firstname! Your account has been created.");
+    // Insert a notification for the new user
+    $this->insertNotification($userId, "Welcome, $firstname! Your account has been created.");
+
+    // 👇 UPDATED: Notify admins with redirect to employee pending page
+    $result = $this->con->query("SELECT id FROM employee WHERE type_id IN (2, 4)");
+    if ($result) {
+        while ($admin = $result->fetch_assoc()) {
+            // 👇 Added research_id=null and notification_type='employee_pending'
+            $stmt = $this->con->prepare("
+                INSERT INTO notifications (user_id, message, research_id, notification_type, redirect_url, status, created_at) 
+                VALUES (?, ?, NULL, 'employee_pending', 'employeepending.php', 0, NOW())
+            ");
+            $message = "New researcher pending approval: $firstname $lastname ($email)";
+            $stmt->bind_param("is", $admin['id'], $message);
+            $stmt->execute();
+            $stmt->close();
         }
+    }
+}
 
-        return $success;
+return $success;
     }
 
     // Insert a notification
-    public function insertNotification($user_id, $message)
-    {
-        $user_id = (int)$user_id;
-        $message = $this->con->real_escape_string($message);
-
-        $stmt = $this->con->prepare("
-            INSERT INTO notifications (user_id, message, status, created_at) 
-            VALUES (?, ?, 0, NOW())
-        ");
-        $stmt->bind_param("is", $user_id, $message);
-
-        return $stmt->execute();
+   public function insertNotification($user_id, $message, $research_id = null, $notification_type = null)
+{
+    $user_id = (int)$user_id;
+    $message = $this->con->real_escape_string($message);
+    $research_id = $research_id ? (int)$research_id : null;
+    $notification_type = $notification_type ? $this->con->real_escape_string($notification_type) : null;
+    
+    // Auto-generate redirect URL based on notification type
+    $redirect_url = null;
+    if ($research_id && $notification_type) {
+        switch ($notification_type) {
+            case 'approved':
+                $redirect_url = 'approved.php';
+                break;
+            case 'revised':
+                $redirect_url = 'revised.php';
+                break;
+            case 'published':
+                $redirect_url = 'publish.php';
+                break;
+            case 'pending':
+                $redirect_url = 'pending.php';
+                break;
+            case 'cancelled':
+                $redirect_url = 'cancelled.php';
+                break;
+            default:
+                $redirect_url = 'dashboard.php';
+        }
     }
+
+    $stmt = $this->con->prepare("
+        INSERT INTO notifications (user_id, message, research_id, notification_type, redirect_url, status, created_at) 
+        VALUES (?, ?, ?, ?, ?, 0, NOW())
+    ");
+    $stmt->bind_param("isiss", $user_id, $message, $research_id, $notification_type, $redirect_url);
+
+    return $stmt->execute();
+}
     public function getResearchById($research_id)
     {
         $stmt = $this->con->prepare("
@@ -371,36 +413,37 @@ class db
         return $employees;
     }
 
-    public function uploadResearch($title, $description, $members, $file_name, $user_id, $user_type, $startDate, $endDate)
-    {
-        $uploaderName = $_SESSION['fullname'] ?? 'You';
+  public function uploadResearch($title, $description, $members, $file_name, $user_id, $user_type, $startDate, $endDate)
+{
+    $uploaderName = $_SESSION['fullname'] ?? 'You';
 
-        $stmt = $this->con->prepare(
-            "INSERT INTO research 
+    $stmt = $this->con->prepare(
+        "INSERT INTO research 
         (title, description, member, filePath, startDate, endDate, status_id, type_id, user_id, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, NOW(), NOW())"
-        );
-        $stmt->bind_param("ssssssis", $title, $description, $members, $file_name, $startDate, $endDate, $user_type, $user_id);
-        $success = $stmt->execute();
+    );
+    $stmt->bind_param("ssssssis", $title, $description, $members, $file_name, $startDate, $endDate, $user_type, $user_id);
+    $success = $stmt->execute();
 
-        if ($success) {
-            // Notification for uploader
-            $this->insertNotification($user_id, "New research uploaded by You: {$title}");
+    if ($success) {
+        $research_id = $this->con->insert_id; // 🎯 Get the inserted research ID
 
-            // Notification for intended roles (type_id 2 or 4), excluding uploader
-            $result = $this->con->query("SELECT id FROM employee WHERE type_id IN (2, 4) AND id != {$user_id}");
-            if ($result) {
-                while ($user = $result->fetch_assoc()) {
-                    $messageToSend = "New research uploaded by {$uploaderName}: {$title}";
-                    $this->insertNotification($user['id'], $messageToSend);
-                }
+        // Notification for uploader
+        $this->insertNotification($user_id, "New research uploaded by You: {$title}", $research_id, "pending");
+
+        // Notification for intended roles (type_id 2 or 4), excluding uploader
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id IN (2, 4) AND id != {$user_id}");
+        if ($result) {
+            while ($user = $result->fetch_assoc()) {
+                $messageToSend = "New research uploaded by {$uploaderName}: {$title}";
+                $this->insertNotification($user['id'], $messageToSend, $research_id, "pending");
             }
         }
-
-        $stmt->close();
-        return $success;
     }
 
+    $stmt->close();
+    return $success;
+}
     // Fetch all research by status_id
     public function getResearchByStatus($status_id)
     {
@@ -559,86 +602,89 @@ class db
         $stmt->close();
     }
 
-    public function updateResearchStatusExtended($research_id, $status_id, $updatedByUserId, $comment = null, $complianceFile = null)
-    {
-        $research_id = intval($research_id);
-        $status_id = intval($status_id);
-        $updatedByUserId = intval($updatedByUserId);
+   public function updateResearchStatusExtended($research_id, $status_id, $updatedByUserId, $comment = null, $complianceFile = null)
+{
+    $research_id = intval($research_id);
+    $status_id = intval($status_id);
+    $updatedByUserId = intval($updatedByUserId);
 
-        switch ($status_id) {
-
-            case 2: // Approved
-                $statusText = "Approved";
-                $stmt = $this->con->prepare("
+    switch ($status_id) {
+        case 2: // Approved
+            $statusText = "Approved";
+            $notifType = "approved";
+            $stmt = $this->con->prepare("
                 UPDATE research 
                 SET status_id = ?, desisyon_id = ?, comment = NULL, compliance = NULL, updated_at = NOW()
                 WHERE id = ?
             ");
-                $stmt->bind_param("iii", $status_id, $updatedByUserId, $research_id);
-                break;
+            $stmt->bind_param("iii", $status_id, $updatedByUserId, $research_id);
+            break;
 
-            case 3: // Revised
-                $statusText = "Revised";
-                $stmt = $this->con->prepare("
+        case 3: // Revised
+            $statusText = "Revised";
+            $notifType = "revised";
+            $stmt = $this->con->prepare("
                 UPDATE research 
                 SET status_id = ?, desisyon_id = ?, comment = ?, compliance = ?, updated_at = NOW()
                 WHERE id = ?
             ");
-                $stmt->bind_param("iissi", $status_id, $updatedByUserId, $comment, $complianceFile, $research_id);
-                break;
+            $stmt->bind_param("iissi", $status_id, $updatedByUserId, $comment, $complianceFile, $research_id);
+            break;
 
-            case 4: // Rejected
-                $statusText = "Rejected";
-                $stmt = $this->con->prepare("
+        case 4: // Rejected/Cancelled
+            $statusText = "Cancelled";
+            $notifType = "cancelled";
+            $stmt = $this->con->prepare("
                 UPDATE research 
                 SET status_id = ?, desisyon_id = ?, comment = ?, compliance = ?, updated_at = NOW()
                 WHERE id = ?
             ");
-                $stmt->bind_param("iissi", $status_id, $updatedByUserId, $comment, $complianceFile, $research_id);
-                break;
+            $stmt->bind_param("iissi", $status_id, $updatedByUserId, $comment, $complianceFile, $research_id);
+            break;
 
-            case 5: // Published
-                $statusText = "Published";
-                $stmt = $this->con->prepare("
+        case 5: // Published
+            $statusText = "Published";
+            $notifType = "published";
+            $stmt = $this->con->prepare("
                 UPDATE research 
                 SET status_id = ?, desisyon_id = ?, updated_at = NOW()
                 WHERE id = ?
             ");
-                $stmt->bind_param("iii", $status_id, $updatedByUserId, $research_id);
-                break;
+            $stmt->bind_param("iii", $status_id, $updatedByUserId, $research_id);
+            break;
 
-            default:
-                return false;
-        }
-
-        $stmt->execute();
-        $stmt->close();
-
-        // Fetch research info
-        $stmt2 = $this->con->prepare("SELECT title, user_id FROM research WHERE id = ?");
-        $stmt2->bind_param("i", $research_id);
-        $stmt2->execute();
-        $info = $stmt2->get_result()->fetch_assoc();
-        $stmt2->close();
-
-        $owner = $info['user_id'];
-        $title = stripslashes($info['title']);
-        $updater = $this->getEmployeeName($updatedByUserId);
-
-        // Notification message
-        if ($status_id === 3) {
-            $reason = $comment ?: 'required revisions';
-            $message = "Your research must be {$statusText} due to {$reason}, updated by {$updater}.";
-        } else {
-            $message = "Your research '{$title}' has been {$statusText} by {$updater}.";
-        }
-
-        $this->insertNotification($owner, $message);
-        $this->insertLog($updatedByUserId, "Updated research '{$title}' to {$statusText}");
-
-        return true;
+        default:
+            return false;
     }
 
+    $stmt->execute();
+    $stmt->close();
+
+    // Fetch research info
+    $stmt2 = $this->con->prepare("SELECT title, user_id FROM research WHERE id = ?");
+    $stmt2->bind_param("i", $research_id);
+    $stmt2->execute();
+    $info = $stmt2->get_result()->fetch_assoc();
+    $stmt2->close();
+
+    $owner = $info['user_id'];
+    $title = stripslashes($info['title']);
+    $updater = $this->getEmployeeName($updatedByUserId);
+
+    // Notification message
+    if ($status_id === 3) {
+        $reason = $comment ?: 'required revisions';
+        $message = "Your research must be {$statusText} due to {$reason}, updated by {$updater}.";
+    } else {
+        $message = "Your research '{$title}' has been {$statusText} by {$updater}.";
+    }
+
+    // 🎯 UPDATED: Pass research_id and notification_type
+    $this->insertNotification($owner, $message, $research_id, $notifType);
+    $this->insertLog($updatedByUserId, "Updated research '{$title}' to {$statusText}");
+
+    return true;
+}
 
 
     // Update a specific employee's status

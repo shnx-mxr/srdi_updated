@@ -39,139 +39,379 @@ if (isset($_POST['submit'])) {
 
 <head>
     <meta charset="UTF-8">
-    <title>Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - DMMMSU SRDI Research Tracking</title>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
+        * {
             margin: 0;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: Arial, sans-serif;
-            background: url('https://cdn.pixabay.com/photo/2022/08/14/01/35/leaves-7384743_1280.jpg') no-repeat center/cover;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        .glass {
-            width: 400px;
-            padding: 30px;
-            border-radius: 20px;
-            background: rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            color: #fff;
-        }
+     body {
+    min-height: 100vh;
+    display: flex;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: white;
+    position: relative;
+    overflow-x: hidden;
+    overflow-y: auto; ✅
+}
 
-        .glass h2 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
 
-        input {
-            width: 94%;
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 10px;
-            border: none;
-            background: rgba(255, 255, 255, 0.2);
-            color: #fff;
-            background-color: #fff;
-            outline: none;
-        }
-
-        button {
+        body::before {
+            content: '';
+            position: absolute;
             width: 100%;
-            padding: 12px;
-            margin-top: 15px;
-            border: 1px solid black;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.3);
-            color: black;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 16px;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg width="60" height="60" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(34,197,94,0.05)" stroke-width="1"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grid)"/></svg>');
+            opacity: 0.4;
         }
 
-        button:hover {
-            background: white;
+        .login-container {
+            display: flex;
+            width: 100%;
+            max-width: 1400px;
+            margin: auto;
+            background: #ffffff;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            position: relative;
+            z-index: 1;
+            min-height: 600px;
+            border: 1px solid rgba(34, 197, 94, 0.2);
         }
 
-        .register-link {
-            margin-top: 15px;
-            text-align: center;
-        }
-
-        .register-link a,
-        p {
-            color: black;
-            ;
-        }
-
-
-
-        .srdi-logo {
-            width: 100px;
-            border-radius: 50%;
-        }
-
-        .title-page {
+        .left-panel {
+            flex: 1;
+            background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+            padding: 60px;
             display: flex;
             flex-direction: column;
+            justify-content: center;
             align-items: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            border-right: 1px solid rgba(34, 197, 94, 0.15);
         }
 
-        h2 {
-            font-weight: bolder;
-            color: black;
-            letter-spacing: 1px;
+        .left-panel::before {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: rgba(34, 197, 94, 0.15);
+            border-radius: 50%;
+            top: -100px;
+            right: -100px;
+        }
+
+        .left-panel::after {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: rgba(34, 197, 94, 0.1);
+            border-radius: 50%;
+            bottom: -80px;
+            left: -80px;
+        }
+
+        .branding {
+            text-align: center;
+            z-index: 2;
+        }
+
+        .logo-container {
+            margin-bottom: 30px;
+        }
+
+        .srdi-logo {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: 4px solid rgba(34, 197, 94, 0.3);
+            padding: 10px;
+            background: white;
+            box-shadow: 0 10px 30px rgba(34, 197, 94, 0.2);
+        }
+
+        .branding h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+
+        .branding p {
+            font-size: 16px;
+            opacity: 0.9;
+            line-height: 1.6;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .features {
+            margin-top: 50px;
+            z-index: 2;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            opacity: 0.95;
+        }
+
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(34, 197, 94, 0.15);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 20px;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .right-panel {
+            flex: 1;
+            padding: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: #ffffff;
+        }
+
+        .login-header {
+            margin-bottom: 40px;
+        }
+
+        .login-header h2 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a202c;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .login-header p {
+            color: #64748b;
+            font-size: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
         }
 
         label {
+            display: block;
             font-size: 14px;
-            letter-spacing: 1px;
-            margin-left: 10px;
-            color: black;
-
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 8px;
+            letter-spacing: 0.2px;
         }
 
-        input:focus {
-            background-color: #fff;
-            border: 3px solid green !important;
-            color: black;
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+            color: #1e293b;
+            font-family: 'Inter', sans-serif;
         }
 
-        h3 {
-            letter-spacing: 2px;
-            background-color: #fff;
-            color: black;
-            font-weight: bolder;
-            padding: 5px;
-            border-radius: 10px;
+        input[type="email"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #22c55e;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1);
+        }
+
+        input::placeholder {
+            color: #94a3b8;
+        }
+
+        button[type="submit"] {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 8px;
+            letter-spacing: 0.3px;
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+        }
+
+        button[type="submit"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(34, 197, 94, 0.4);
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+        }
+
+        button[type="submit"]:active {
+            transform: translateY(0);
+        }
+
+        .register-link {
+            margin-top: 30px;
+            text-align: center;
+            padding-top: 30px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .register-link p {
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .register-link a {
+            color: #22c55e;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .register-link a:hover {
+            color: #16a34a;
+            text-decoration: underline;
+        }
+
+        .password-toggle {
+            position: relative;
+        }
+
+        @media (max-width: 968px) {
+            .login-container {
+                flex-direction: column;
+                max-width: 500px;
+                margin: 20px;
+            }
+
+            .left-panel {
+                padding: 40px;
+                min-height: auto;
+            }
+
+            .features {
+                display: none;
+            }
+
+            .right-panel {
+                padding: 40px;
+            }
+
+            .branding h1 {
+                font-size: 24px;
+            }
+
+            .srdi-logo {
+                width: 100px;
+                height: 100px;
+            }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #22c55e;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #16a34a;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="glass">
-        <div class="title-page">
-
-            <img src="https://www.dmmmsu.edu.ph/wp-content/uploads/2019/06/SRDI-Logo.jpg" class="srdi-logo" alt="">
-            <h3>DMMMSU SRDI</h1>
-                <h2>LOG IN</h2>
-
+    <div class="login-container">
+        <!-- Left Panel - Branding -->
+        <div class="left-panel">
+            <div class="branding">
+                <div class="logo-container">
+                    <img src="https://www.dmmmsu.edu.ph/wp-content/uploads/2019/06/SRDI-Logo.jpg" class="srdi-logo" alt="DMMMSU SRDI Logo">
+                </div>
+                <h1>DMMMSU SRDI</h1>
+                <p>Research Tracking System</p>
+            </div>
+            
+            <div class="features">
+                <div class="feature-item">
+                    <div class="feature-icon">📊</div>
+                    <div>Track research progress</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🔬</div>
+                    <div>Manage research projects efficiently</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">👥</div>
+                    <div>Collaborate with research teams</div>
+                </div>
+            </div>
         </div>
 
-        <form method="POST">
-            <label for="">Email</label>
-            <input type="email" name="email" placeholder="Email Address" value="<?= htmlspecialchars($email) ?>">
-            <label for="">Password</label>
-            <input type="password" name="password" placeholder="Password">
-            <button type="submit" name="submit">Log in</button>
-        </form>
-        <div class="register-link">
-            <p>Don't have an account? <a href="register.php">Register Here</a></p>
+        <!-- Right Panel - Login Form -->
+        <div class="right-panel">
+            <div class="login-header">
+                <h2>Welcome Back</h2>
+                <p>Please sign in to access your research dashboard</p>
+            </div>
+
+            <form method="POST">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" 
+                           id="email" 
+                           name="email" 
+                           placeholder="@dmmmsu.edu.ph" 
+                           value="<?= htmlspecialchars($email) ?>"
+                           required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" 
+                           id="password" 
+                           name="password" 
+                           placeholder="Enter your password"
+                           required>
+                </div>
+
+                <button type="submit" name="submit">Sign In</button>
+            </form>
+
+            <div class="register-link">
+                <p>Don't have an account? <a href="register.php">Create an account</a></p>
+            </div>
         </div>
     </div>
 
@@ -179,11 +419,16 @@ if (isset($_POST['submit'])) {
         <script>
             Swal.fire({
                 icon: 'error',
-                title: 'Oops!',
-                html: `<?= implode('<br>', $message); ?>`
+                title: 'Authentication Failed',
+                html: `<?= implode('<br>', $message); ?>`,
+                confirmButtonColor: '#22c55e',
+                customClass: {
+                    popup: 'rounded-popup'
+                }
             });
         </script>
     <?php endif; ?>
+
 </body>
 
 </html>
