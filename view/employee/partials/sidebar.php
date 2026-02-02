@@ -19,26 +19,48 @@ $type_id = $_SESSION['type_id'] ?? 0;
                     Research
                     <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                 </a>
-                <div class="collapse" id="collapseResearch" data-bs-parent="#sidenavAccordion">
-                    <nav class="sb-sidenav-menu-nested nav">
-                        <?php if ($type_id == 6 || $type_id == 5 || $type_id == 2 || $type_id == 3 || $type_id == 2 || $type_id == 1): ?>
-                            <a class="nav-link" href="approved.php"><i class="fas fa-check-circle me-1"></i> Approved</a>
-                            <a class="nav-link" href="cancel.php"><i class="fas fa-times-circle me-1"></i> Cancelled</a>
-                            <a class="nav-link" href="revised.php"><i class="fas fa-ban me-1"></i> Revision</a>
-                            <a class="nav-link" href="publish.php"><i class="fas fa-upload me-1"></i> Published</a>
-                            <a class="nav-link" href="pending.php"><i class="fas fa-upload me-1"></i> Pending</a>
-                        <?php endif; ?>
-                        <?php if ($type_id == 1): ?>
-                            <a class="nav-link" href="upload.php"><i class="fas fa-file-upload me-1"></i> Upload Research</a>
-                        <?php endif; ?>
-                    </nav>
-                </div>
+            <div class="collapse" id="collapseResearch" data-bs-parent="#sidenavAccordion">
+    <nav class="sb-sidenav-menu-nested nav">
+        <?php if (in_array($type_id, [1, 2, 3, 4, 5, 6])): ?>
+            <a class="nav-link" href="pending.php">
+                <i class="fas fa-clock me-1"></i> Pending
+                <?php if ($type_id == 4): ?><span class="badge bg-secondary ms-1">View Only</span><?php endif; ?>
+            </a>
+            <a class="nav-link" href="approved.php">
+                <i class="fas fa-check-circle me-1"></i> Approved
+                <?php if ($type_id == 4): ?><span class="badge bg-secondary ms-1">View Only</span><?php endif; ?>
+            </a>
+            <a class="nav-link" href="revised.php">
+                <i class="fas fa-edit me-1"></i> Revision
+                <?php if ($type_id == 4): ?><span class="badge bg-secondary ms-1">View Only</span><?php endif; ?>
+            </a>
+            <a class="nav-link" href="cancel.php">
+                <i class="fas fa-times-circle me-1"></i> Cancelled
+                <?php if ($type_id == 4): ?><span class="badge bg-secondary ms-1">View Only</span><?php endif; ?>
+            </a>
+            <a class="nav-link" href="publish.php">
+                <i class="fas fa-globe me-1"></i> Published
+                <?php if ($type_id == 4): ?><span class="badge bg-secondary ms-1">View Only</span><?php endif; ?>
+            </a>
+        <?php endif; ?>
+        
+        <?php if ($type_id == 1): ?>
+            <a class="nav-link" href="upload.php">
+                <i class="fas fa-file-upload me-1"></i> Upload Research
+            </a>
+        <?php endif; ?>
+    </nav>
+</div>
 
                 <?php if ($type_id == 4): ?>
                     <div class="sb-sidenav-menu-heading">Administration</div>
-                    <a class="nav-link" href="backup.php"><i class="fas fa-file-upload me-1"></i> Backup and restore</a>
                     <a class="nav-link" href="employeepending.php">
-                        <div class="sb-nav-link-icon"><i class="fas fa-users"></i></div>Employee Pending
+                        <div class="sb-nav-link-icon"><i class="fas fa-users"></i></div>
+                        Employee Pending
+                    </a>
+                    <a class="nav-link" href="backup.php">
+                        <div class="sb-nav-link-icon"><i class="fas fa-database"></i></div>
+                        Backup & Restore
                     </a>
                 <?php endif; ?>
             </div>
@@ -65,5 +87,10 @@ $type_id = $_SESSION['type_id'] ?? 0;
 
     .sb-sidenav-menu-nested .nav-link {
         padding-left: 2rem;
+    }
+    
+    .badge.bg-secondary {
+        font-size: 0.65rem;
+        padding: 0.25em 0.5em;
     }
 </style>

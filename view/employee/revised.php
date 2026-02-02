@@ -106,7 +106,20 @@ foreach ($researchList as $key => $research) {
                                             </td>
                                             <td><?= htmlspecialchars($research['comment'] ?? '-') ?></td>
 
-                                            <td><span class="badge bg-warning">Revision</span></td>
+                                            <!-- 👇 UPDATED STATUS COLUMN -->
+                                            <td>
+                                                <?php
+                                                if (isset($research['rejected_by_exec']) && $research['rejected_by_exec'] == 1) {
+                                                    echo '<span class="badge bg-danger">Rejected by Exec Dir</span>';
+                                                    if (!empty($research['exec_reject_comment'])) {
+                                                        echo '<br><small class="text-muted mt-1 d-block">Reason: ' . htmlspecialchars($research['exec_reject_comment']) . '</small>';
+                                                    }
+                                                } else {
+                                                    echo '<span class="badge bg-warning">Revision</span>';
+                                                }
+                                                ?>
+                                            </td>
+
                                             <td><?= htmlspecialchars($research['decided_by']) ?></td>
                                             <td><?= htmlspecialchars($research['type_name']) ?></td>
                                             <td>

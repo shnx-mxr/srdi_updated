@@ -9,7 +9,7 @@ class db
 
     public function __construct()
     {
-        $this->con = mysqli_connect('localhost', 'root', '', 'srdi_updated', 3306);
+$this->con = mysqli_connect('localhost', 'root', '', 'srdi', 3306);
         if (!$this->con) {
             die("Database connection failed: " . mysqli_connect_error());
         }
@@ -809,4 +809,172 @@ return $success;
     {
         return $this->addPublicationDetails($research_id, $pub_title, $pub_date, $pub_link, $publisher);
     }
+
+
+    // Mark research as processed by Records
+public function markProcessedByRecords($research_id, $records_user_id)
+{
+    $research_id = (int)$research_id;
+    $records_user_id = (int)$records_user_id;
+    
+    $stmt = $this->con->prepare("
+        UPDATE research 
+        SET processed_by_records = 1, 
+            records_processed_date = NOW(),
+            records_processor_id = ?
+        WHERE id = ?
+    ");
+    $stmt->bind_param("ii", $records_user_id, $research_id);
+    $success = $stmt->execute();
+    $stmt->close();
+    
+    if ($success) {
+        // Get research info
+        $research = $this->getResearchById($research_id);
+        $title = $research['title'];
+        $recordsName = $this->getEmployeeName($records_user_id);
+        
+        // Notify Exec Dir (type_id = 6)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 6");
+        if ($result) {
+            while ($execDir = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been processed by Records ($recordsName) and is ready for your approval.";
+                $this->insertNotification($execDir['id'], $message, $research_id, 'approved');
+            }
+        }
+        
+        // Log activity
+        $this->insertLog($records_user_id, "Processed research '{$title}' in Records");
+    }
+    
+    return $success;
+}
+
+// Send research to Records (by Div Chief)
+public function sendToRecords($research_id, $div_chief_id)
+{
+    $research_id = (int)$research_id;
+    $div_chief_id = (int)$div_chief_id;
+    
+    // Research is already approved (status = 2), just flag it for Records
+    // No status change needed
+    
+    // Get research info
+    $research = $this->getResearchById($research_id);
+    $title = $research['title'];
+    $divChiefName = $this->getEmployeeName($div_chief_id);
+    
+    // Notify Records (type_id = 5)
+    $result = $this->con->query("SELECT id FROM employee WHERE type_id = 5");
+    if ($result) {
+        while ($records = $result->fetch_assoc()) {
+            $message = "Research '{$title}' has been sent by Division Chief ($divChiefName) for processing.";
+            $this->insertNotification($records['id'], $message, $research_id, 'approved');
+        }
+    }
+    
+    // Log activity
+    $this->insertLog($div_chief_id, "Sent research '{$title}' to Records");
+    
+    return true;
+}
+
+
+
+
+// Exec Dir rejects research
+public function rejectByExecDir($research_id, $exec_user_id, $comment)
+{
+    $research_id = (int)$research_id;
+    $exec_user_id = (int)$exec_user_id;
+    $comment = $this->con->real_escape_string($comment);
+    
+    // Mark as rejected by exec and reset records flag
+    $stmt = $this->con->prepare("
+        UPDATE research 
+        SET rejected_by_exec = 1,
+            exec_reject_comment = ?,
+            processed_by_records = 0,
+            desisyon_id = ?
+        WHERE id = ?
+    ");
+    $stmt->bind_param("sii", $comment, $exec_user_id, $research_id);
+    $success = $stmt->execute();
+    $stmt->close();
+    
+    if ($success) {
+        // Get research info
+        $research = $this->getResearchById($research_id);
+        $title = $research['title'];
+        $ownerId = $research['user_id'];
+        $execName = $this->getEmployeeName($exec_user_id);
+        
+        // Notify Records (type_id = 5)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 5");
+        if ($result) {
+            while ($records = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been rejected by Exec Dir ($execName). Please process and forward.";
+                $this->insertNotification($records['id'], $message, $research_id, 'revised');
+            }
+        }
+        
+        // Notify researcher
+        $ownerMessage = "Your research '{$title}' has been rejected by Executive Director with comment: {$comment}";
+        $this->insertNotification($ownerId, $ownerMessage, $research_id, 'revised');
+        
+        // Log activity
+        $this->insertLog($exec_user_id, "Rejected research '{$title}'");
+    }
+    
+    return $success;
+}
+
+// Records forwards rejected research
+public function forwardRejectedResearch($research_id, $records_user_id)
+{
+    $research_id = (int)$research_id;
+    $records_user_id = (int)$records_user_id;
+    
+    // Change status to Revision and mark as processed
+    $stmt = $this->con->prepare("
+        UPDATE research 
+        SET status_id = 3,
+            processed_by_records = 1
+        WHERE id = ?
+    ");
+    $stmt->bind_param("i", $research_id);
+    $success = $stmt->execute();
+    $stmt->close();
+    
+    if ($success) {
+        // Get research info
+        $research = $this->getResearchById($research_id);
+        $title = $research['title'];
+        $ownerId = $research['user_id'];
+        $recordsName = $this->getEmployeeName($records_user_id);
+        
+        // Notify Section Head (type_id = 2)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
+        if ($result) {
+            while ($secHead = $result->fetch_assoc()) {
+                $message = "Research '{$title}' (rejected by Exec Dir) has been forwarded by Records.";
+                $this->insertNotification($secHead['id'], $message, $research_id, 'revised');
+            }
+        }
+        
+        // Notify Division Chief (type_id = 3)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
+        if ($result) {
+            while ($divChief = $result->fetch_assoc()) {
+                $message = "Research '{$title}' (rejected by Exec Dir) has been forwarded by Records.";
+                $this->insertNotification($divChief['id'], $message, $research_id, 'revised');
+            }
+        }
+        
+        // Log activity
+        $this->insertLog($records_user_id, "Forwarded rejected research '{$title}' from Exec Dir");
+    }
+    
+    return $success;
+}
 }
