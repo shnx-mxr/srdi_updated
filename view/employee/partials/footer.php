@@ -1,9 +1,11 @@
 <footer class="py-4 bg-light mt-auto">
     <div class="container-fluid px-4">
         <div class="d-flex align-items-center justify-content-between small">
-            <div class="text-muted">&copy; <?= date('Y') ?> DMMMSU-NLUC SRDI</div>
+            <div class="text-muted">&copy; <?= date('Y') ?> DMMMSU - SRDI</div>
             <div>
-                <a href="#">Privacy Policy</a> &middot; <a href="#">Terms &amp; Conditions</a>
+
+
+<a href="#" class="text-decoration-none text-secondary">System Version 1.0</a>
             </div>
         </div>
     </div>

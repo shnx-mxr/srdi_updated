@@ -7,54 +7,23 @@ $user_id = $_SESSION['user_id'] ?? 0;
 $type_id = $_SESSION['type_id'] ?? 0;
 
 $db = new db();
-$alert = null;
 
 // Research type mapping
 $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 
-// Get research using the new method
+// Get all research for the user based on type
 $researchList = $db->getResearchForUser($user_id, $type_id);
 
-// 👇 UPDATED FILTER: Show based on WHO cancelled AND user role
-// Filter: Show based on WHO cancelled AND user role
-$researchList = array_filter($researchList, function ($r) use ($type_id, $user_id) {
-    // Only show cancelled research (status_id = 4)
-    if ($r['status_id'] != 4) return false;
+// Filter: Show research that Records already processed (for tracking)
+$researchList = array_filter($researchList, function ($r) use ($type_id) {
+    // Only for Records (type_id = 5)
+    if ($type_id != 5) return false;
     
-    $decidedByRole = $r['decided_by_role'] ?? 0;
-    
-    // Type 1 (Researcher): sees their own cancelled research
-    if ($type_id == 1) {
-        return $r['user_id'] == $user_id;
-    }
-    
-    // Type 2 (Section Head): 
-    // - Sees research they cancelled (decided_by_role = 2)
-    // - DOES NOT see research cancelled by Div Chief (3) or Exec Dir (6)
-    if ($type_id == 2) {
-        return $decidedByRole == 2;
-    }
-    
-    // Type 3 (Div Chief):
-    // - Sees research they cancelled (decided_by_role = 3)
-    // - DOES NOT see research cancelled by Exec Dir (6)
-    if ($type_id == 3) {
-        return $decidedByRole == 3;
-    }
-    
-    // Type 4 (Admin): sees all cancelled research
-    if ($type_id == 4) {
-        return true;
-    }
-    
-    // Type 6 (Exec Dir): sees ONLY research they cancelled (decided_by_role = 6)
-    if ($type_id == 6) {
-        return $decidedByRole == 6;
-    }
-    
-    // Type 5 (Records): does NOT see cancelled research (unless from Exec Dir, but that's already handled above)
-    return false;
+    // Show research that Records processed
+    // Can be: status = 2 (still at Exec Dir), status = 3 (rejected and forwarded), status = 4 (cancelled and forwarded), status = 5 (published)
+    return $r['processed_by_records'] == 1;
 });
+
 // Apply type filter if requested
 $filterType = $_GET['type_id'] ?? '';
 if ($filterType && in_array($filterType, [1, 2, 3])) {
@@ -68,6 +37,16 @@ foreach ($researchList as $key => $research) {
     $researchList[$key]['team_leader'] = $db->getEmployeeName($research['user_id']);
     $researchList[$key]['decided_by'] = $research['desisyon_id'] ? $db->getEmployeeName($research['desisyon_id']) : '-';
     $researchList[$key]['type_name'] = $typeNames[$research['type_id']] ?? 'Unknown';
+    
+    // Add current status name
+    $statusMap = [
+        1 => 'Pending',
+        2 => 'With Executive Director',
+        3 => 'Revision (Forwarded)',
+        4 => 'Cancelled (Forwarded)',
+        5 => 'Published'
+    ];
+    $researchList[$key]['status_name'] = $statusMap[$research['status_id']] ?? 'Unknown';
 }
 ?>
 
@@ -81,7 +60,8 @@ foreach ($researchList as $key => $research) {
         <?php include 'partials/sidebar.php'; ?>
         <div id="layoutSidenav_content">
             <main class="container-fluid px-4">
-                <h1 class="mt-4">Cancelled Research</h1>
+                <h1 class="mt-4">Processed Research (Tracking)</h1>
+                <p class="text-muted">Research that you have already processed</p>
 
                 <!-- Type Filter -->
                 <form method="GET" class="mb-3">
@@ -97,7 +77,7 @@ foreach ($researchList as $key => $research) {
 
                 <?php if ($researchList): ?>
                     <div class="card mb-4">
-                        <div class="card-header"><i class="fas fa-list"></i> Cancelled Research</div>
+                        <div class="card-header"><i class="fas fa-history"></i> Processed Research</div>
                         <div class="card-body">
                             <table class="table table-bordered table-striped">
                                 <thead>
@@ -108,10 +88,8 @@ foreach ($researchList as $key => $research) {
                                         <th>Start Date</th>
                                         <th>End Date</th>
                                         <th>Research File</th>
-                                        <th>Compliance File</th>
-                                        <th>Comment</th>
-                                        <th>Status</th>
-                                        <th>Decided By</th>
+                                        <th>Current Status</th>
+                                        <th>Processed Date</th>
                                         <th>Type</th>
                                     </tr>
                                 </thead>
@@ -126,45 +104,27 @@ foreach ($researchList as $key => $research) {
                                             <td>
                                                 <?php if (!empty($research['filePath'])): ?>
                                                     <a href="research/<?= htmlspecialchars($research['filePath']) ?>" target="_blank">View Research</a>
-                                                <?php else: ?> N/A <?php endif; ?>
+                                                <?php else: ?>N/A<?php endif; ?>
                                             </td>
-                                            <td>
-                                                <?php if (!empty($research['compliance'])): ?>
-                                                    <a href="compliance/<?= htmlspecialchars($research['compliance']) ?>" target="_blank">View Compliance</a>
-                                                <?php else: ?> N/A <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?php 
-                                                // Show cancel comment from exec or regular comment
-                                                $cancelComment = $research['exec_cancel_comment'] ?? $research['comment'] ?? '-';
-                                                echo htmlspecialchars($cancelComment);
-                                                ?>
-                                            </td>
-                                            
-                                            <!-- Status Column -->
                                             <td>
                                                 <?php
-                                                if (isset($research['cancelled_by_exec']) && $research['cancelled_by_exec'] == 1) {
-                                                    echo '<span class="badge bg-danger">Cancelled by Exec Dir</span>';
-                                                    if (!empty($research['exec_cancel_comment'])) {
-                                                        echo '<br><small class="text-muted mt-1 d-block">Reason: ' . htmlspecialchars($research['exec_cancel_comment']) . '</small>';
-                                                    }
-                                                } else {
-                                                    // Show who cancelled it
-                                                    $decidedByRole = $research['decided_by_role'] ?? 0;
-                                                    $cancelledBy = match($decidedByRole) {
-                                                        2 => 'Section Head',
-                                                        3 => 'Division Chief',
-                                                        6 => 'Exec Director',
-                                                        default => 'Unknown'
-                                                    };
-                                                    echo '<span class="badge bg-dark">Cancelled</span>';
-                                                    echo '<br><small class="text-muted">By: ' . $cancelledBy . '</small>';
-                                                }
+                                                $badgeClass = match($research['status_id']) {
+                                                    2 => 'bg-info',
+                                                    3 => 'bg-warning',
+                                                    4 => 'bg-dark',
+                                                    5 => 'bg-primary',
+                                                    default => 'bg-secondary'
+                                                };
                                                 ?>
+                                                <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($research['status_name']) ?></span>
                                             </td>
-                                            
-                                            <td><?= htmlspecialchars($research['decided_by']) ?></td>
+                                            <td>
+                                                <?php if (!empty($research['records_processed_date'])): ?>
+                                                    <?= date('M d, Y h:i A', strtotime($research['records_processed_date'])) ?>
+                                                <?php else: ?>
+                                                    N/A
+                                                <?php endif; ?>
+                                            </td>
                                             <td><?= htmlspecialchars($research['type_name']) ?></td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -173,7 +133,7 @@ foreach ($researchList as $key => $research) {
                         </div>
                     </div>
                 <?php else: ?>
-                    <p>No cancelled research found.</p>
+                    <p>No processed research found.</p>
                 <?php endif; ?>
             </main>
             <?php include 'partials/footer.php'; ?>

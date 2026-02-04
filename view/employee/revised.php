@@ -15,9 +15,43 @@ $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 // Get all research for the user based on type
 $researchList = $db->getResearchForUser($user_id, $type_id);
 
-// Filter only Revised research (status_id = 3)
-$researchList = array_filter($researchList, function ($r) {
-    return $r['status_id'] == 3;
+// Filter: Show based on WHO revised AND user role
+$researchList = array_filter($researchList, function ($r) use ($type_id, $user_id) {
+    // Only show revised research (status_id = 3)
+    if ($r['status_id'] != 3) return false;
+    
+    $decidedByRole = $r['decided_by_role'] ?? 0;
+    
+    // Type 1 (Researcher): sees their own revised research
+    if ($type_id == 1) {
+        return $r['user_id'] == $user_id;
+    }
+    
+    // Type 2 (Section Head): 
+    // - Sees research they revised (decided_by_role = 2)
+    // - OR research revised by Div Chief or Exec Dir (decided_by_role = 3 or 6)
+    if ($type_id == 2) {
+        return in_array($decidedByRole, [2, 3, 6]);
+    }
+    
+    // Type 3 (Div Chief):
+    // - Sees research they revised (decided_by_role = 3)
+    // - OR research revised by Exec Dir (decided_by_role = 6)
+    if ($type_id == 3) {
+        return in_array($decidedByRole, [3, 6]);
+    }
+    
+    // Type 4 (Admin): sees all revised research
+    if ($type_id == 4) {
+        return true;
+    }
+    
+   // Type 6 (Exec Dir): sees ONLY revisions forwarded by Records (decided_by_role = 6)
+    if ($type_id == 6) {
+        return $decidedByRole == 6;
+    }
+    // Type 5 (Records): does NOT see revised research
+    return false;
 });
 
 // Apply type filter if requested
@@ -78,7 +112,7 @@ foreach ($researchList as $key => $research) {
                                         <th>Status</th>
                                         <th>Decided By</th>
                                         <th>Type</th>
-                                        <th>Action</th>
+                                        <?php if ($type_id == 1): ?><th>Action</th><?php endif; ?>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -106,41 +140,56 @@ foreach ($researchList as $key => $research) {
                                             </td>
                                             <td><?= htmlspecialchars($research['comment'] ?? '-') ?></td>
 
-                                            <!-- 👇 UPDATED STATUS COLUMN -->
+                                            <!-- Status Column -->
                                             <td>
                                                 <?php
+                                                // Check if rejected by Exec Dir
                                                 if (isset($research['rejected_by_exec']) && $research['rejected_by_exec'] == 1) {
                                                     echo '<span class="badge bg-danger">Rejected by Exec Dir</span>';
                                                     if (!empty($research['exec_reject_comment'])) {
                                                         echo '<br><small class="text-muted mt-1 d-block">Reason: ' . htmlspecialchars($research['exec_reject_comment']) . '</small>';
                                                     }
                                                 } else {
+                                                    // Show who revised it
+                                                    $decidedByRole = $research['decided_by_role'] ?? 0;
+                                                    $revisedBy = match($decidedByRole) {
+                                                        2 => 'Section Head',
+                                                        3 => 'Division Chief',
+                                                        6 => 'Exec Director',
+                                                        default => 'Unknown'
+                                                    };
                                                     echo '<span class="badge bg-warning">Revision</span>';
+                                                    echo '<br><small class="text-muted">By: ' . $revisedBy . '</small>';
                                                 }
                                                 ?>
                                             </td>
 
                                             <td><?= htmlspecialchars($research['decided_by']) ?></td>
                                             <td><?= htmlspecialchars($research['type_name']) ?></td>
-                                            <td>
-                                                <?php if ($type_id == 1): ?>
-                                                    <!-- Edit button triggers modal -->
+                                            
+                                            <?php if ($type_id == 1): ?>
+                                                <!-- Researcher can edit and resubmit -->
+                                                <td>
                                                     <button class="btn btn-sm btn-primary" data-bs-toggle="modal"
-                                                        data-bs-target="#editModal<?= $research['id'] ?>">Edit
+                                                        data-bs-target="#editModal<?= $research['id'] ?>">
+                                                        <i class="fas fa-edit"></i> Edit & Resubmit
                                                     </button>
 
                                                     <!-- Edit Modal -->
-                                                    <div class="modal fade" id="editModal<?= $research['id'] ?>" tabindex="-1"
-                                                        aria-labelledby="editModalLabel<?= $research['id'] ?>" aria-hidden="true">
+                                                    <div class="modal fade" id="editModal<?= $research['id'] ?>" tabindex="-1">
                                                         <div class="modal-dialog">
                                                             <form method="POST" action="edit_research_process.php" enctype="multipart/form-data">
                                                                 <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
                                                                 <div class="modal-content">
                                                                     <div class="modal-header">
-                                                                        <h5 class="modal-title" id="editModalLabel<?= $research['id'] ?>">Edit Research</h5>
-                                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                                        <h5 class="modal-title">Edit & Resubmit Research</h5>
+                                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                                     </div>
                                                                     <div class="modal-body">
+                                                                        <div class="alert alert-info">
+                                                                            <strong>Note:</strong> After you submit, this research will go back to <strong>Section Head</strong> for re-approval.
+                                                                        </div>
+                                                                        
                                                                         <div class="mb-3">
                                                                             <label>Title:</label>
                                                                             <input type="text" name="title" class="form-control"
@@ -171,15 +220,14 @@ foreach ($researchList as $key => $research) {
                                                                     </div>
                                                                     <div class="modal-footer">
                                                                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                                        <button type="submit" class="btn btn-success">Save Changes</button>
+                                                                        <button type="submit" class="btn btn-success">Resubmit to Section Head</button>
                                                                     </div>
                                                                 </div>
                                                             </form>
-
                                                         </div>
                                                     </div>
-                                                <?php endif; ?>
-                                            </td>
+                                                </td>
+                                            <?php endif; ?>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>

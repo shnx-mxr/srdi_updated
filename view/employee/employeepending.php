@@ -14,6 +14,22 @@ if ($type_id != 4) {
     exit;
 }
 
+$typeDisplayNames = [
+    1 => 'Researcher',
+    2 => 'Section Head',
+    3 => 'Division Chief',
+    4 => 'Admin',
+    5 => 'Records',
+    6 => 'Executive Head'
+];
+$itemsPerPage = 10; // number of employees per page
+$currentPage = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$offset = ($currentPage - 1) * $itemsPerPage;
+
+$pendingEmployees = $db->getEmployeesByStatus(1, $itemsPerPage, $offset);
+$totalEmployees = $db->countEmployeesByStatus(1); // total pending employees
+$totalPages = ceil($totalEmployees / $itemsPerPage);
+
 $alert = null;
 
 // Handle approve/reject actions
@@ -62,30 +78,76 @@ $pendingEmployees = $db->getEmployeesByStatus(1); // 1 = pending
                         <div class="card-header"><i class="fas fa-users"></i> Pending Employees</div>
                         <div class="card-body">
                             <table class="table table-bordered table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Full Name</th>
-                                        <th>Email</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
+                              <thead>
+    <tr>
+        <th>Full Name</th>
+        <th>Email</th>
+        <th>Address</th>
+        <th>Type</th>
+        <th>Branch</th>
+        <th>Action</th>
+    </tr>
+</thead>
+
                                 <tbody>
-                                    <?php foreach ($pendingEmployees as $emp): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($emp['firstname'] . ' ' . $emp['lastname']) ?></td>
-                                            <td><?= htmlspecialchars($emp['email']) ?></td>
-                            
-                                            <td>
-                                                <form method="POST" class="d-inline">
-                                                    <input type="hidden" name="employee_id" value="<?= $emp['id'] ?>">
-                                                    <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">Approve</button>
-                                                    <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">Reject</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
+                          <?php foreach ($pendingEmployees as $emp): ?>
+<tr>
+    <td><?= htmlspecialchars($emp['firstname'] . ' ' . $emp['middlename'] . ' ' . $emp['lastname']) ?></td>
+    <td><?= htmlspecialchars($emp['email']) ?></td>
+    <td><?= htmlspecialchars($emp['address']) ?></td>
+    <td><?= $typeDisplayNames[$emp['type_id']] ?? 'Unknown' ?></td>
+    <td>
+        <?php 
+            if ($emp['type_id'] == 2) { // Section Head
+                echo htmlspecialchars($emp['branch'] ?? '—'); 
+            } else {
+                echo '—';
+            }
+        ?>
+    </td>
+<td>
+    <div class="d-flex gap-2">
+        <button type="submit" form="form-<?= $emp['id'] ?>" name="action" value="approve" class="btn btn-success btn-sm px-3">
+            <i class="fas fa-check me-1"></i> Approve
+        </button>
+        <button type="submit" form="form-<?= $emp['id'] ?>" name="action" value="reject" class="btn btn-danger btn-sm px-3">
+            <i class="fas fa-times me-1"></i> Reject
+        </button>
+    </div>
+
+    <form id="form-<?= $emp['id'] ?>" method="POST" class="d-none">
+        <input type="hidden" name="employee_id" value="<?= $emp['id'] ?>">
+    </form>
+</td>
+
+</tr>
+<?php endforeach; ?>
+
                                 </tbody>
                             </table>
+                            <?php if ($totalPages > 1): ?>
+<nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center">
+        <!-- Previous page -->
+        <li class="page-item <?= ($currentPage <= 1) ? 'disabled' : '' ?>">
+            <a class="page-link" href="?page=<?= $currentPage - 1 ?>">Previous</a>
+        </li>
+
+        <!-- Page numbers -->
+        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <li class="page-item <?= ($i == $currentPage) ? 'active' : '' ?>">
+                <a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
+            </li>
+        <?php endfor; ?>
+
+        <!-- Next page -->
+        <li class="page-item <?= ($currentPage >= $totalPages) ? 'disabled' : '' ?>">
+            <a class="page-link" href="?page=<?= $currentPage + 1 ?>">Next</a>
+        </li>
+    </ul>
+</nav>
+<?php endif; ?>
+
                         </div>
                     </div>
                 <?php else: ?>

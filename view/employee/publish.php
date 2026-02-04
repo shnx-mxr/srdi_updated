@@ -102,34 +102,47 @@ foreach ($researchList as $key => $research) {
                                             <td><?= htmlspecialchars($research['type_name']) ?></td>
                                             <td>
                                                 <?php if (empty($research['publication_link'])): ?>
-                                                    <!-- Add Publication Button -->
-                                                    <button class="btn btn-success btn-sm"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#addPubModal"
-                                                        data-id="<?= $research['id'] ?>"
-                                                        data-title="<?= htmlspecialchars($research['title']) ?>"
-                                                        data-members="<?= htmlspecialchars($research['member']) ?>">
-                                                        <i class="fas fa-plus"></i> Add Publication
-                                                    </button>
+                                                    <!-- 👇 UPDATED: Only researcher (type_id=1) who owns this research can add publication -->
+                                                    <?php if ($type_id == 1 && $research['user_id'] == $user_id): ?>
+                                                        <button class="btn btn-success btn-sm"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#addPubModal"
+                                                            data-id="<?= $research['id'] ?>"
+                                                            data-title="<?= htmlspecialchars($research['title']) ?>"
+                                                            data-members="<?= htmlspecialchars($research['member']) ?>">
+                                                            <i class="fas fa-plus"></i> Add Publication
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <span class="text-muted">Not yet published</span>
+                                                    <?php endif; ?>
                                                 <?php else: ?>
-                                                    <!-- View & Edit Publication -->
+                                                    <!-- View Publication Link (everyone can see) -->
+                                                    <strong><?= htmlspecialchars($research['publication_title']) ?></strong><br>
+                                                    <small class="text-muted">
+                                                        <?= htmlspecialchars($research['publisher']) ?> | 
+                                                        <?= date('M d, Y', strtotime($research['publication_date'])) ?>
+                                                    </small><br>
                                                     <a href="<?= htmlspecialchars($research['publication_link']) ?>"
                                                         target="_blank"
-                                                        class="btn btn-primary btn-sm">
-                                                        <i class="fas fa-external-link-alt"></i> View
+                                                        class="btn btn-primary btn-sm mt-1">
+                                                        <i class="fas fa-external-link-alt"></i> View Publication
                                                     </a>
-                                                    <button class="btn btn-warning btn-sm"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#editPubModal"
-                                                        data-id="<?= $research['id'] ?>"
-                                                        data-pub-title="<?= htmlspecialchars($research['publication_title']) ?>"
-                                                        data-pub-date="<?= htmlspecialchars($research['publication_date']) ?>"
-                                                        data-pub-link="<?= htmlspecialchars($research['publication_link']) ?>"
-                                                        data-publisher="<?= htmlspecialchars($research['publisher']) ?>"
-                                                        data-title="<?= htmlspecialchars($research['title']) ?>"
-                                                        data-members="<?= htmlspecialchars($research['member']) ?>">
-                                                        <i class="fas fa-edit"></i> Edit
-                                                    </button>
+                                                    
+                                                    <!-- 👇 UPDATED: Only researcher who owns this research can edit -->
+                                                    <?php if ($type_id == 1 && $research['user_id'] == $user_id): ?>
+                                                        <button class="btn btn-warning btn-sm mt-1"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#editPubModal"
+                                                            data-id="<?= $research['id'] ?>"
+                                                            data-pub-title="<?= htmlspecialchars($research['publication_title']) ?>"
+                                                            data-pub-date="<?= htmlspecialchars($research['publication_date']) ?>"
+                                                            data-pub-link="<?= htmlspecialchars($research['publication_link']) ?>"
+                                                            data-publisher="<?= htmlspecialchars($research['publisher']) ?>"
+                                                            data-title="<?= htmlspecialchars($research['title']) ?>"
+                                                            data-members="<?= htmlspecialchars($research['member']) ?>">
+                                                            <i class="fas fa-edit"></i> Edit
+                                                        </button>
+                                                    <?php endif; ?>
                                                 <?php endif; ?>
                                             </td>
                                         </tr>

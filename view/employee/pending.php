@@ -15,91 +15,81 @@ $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 // Get all research for the user based on type
 $researchList = $db->getResearchForUser($user_id, $type_id);
 
-// Filter only pending research (status_id = 1)
+// Filter: Only Section Head and Admin see pending
 $researchList = array_filter($researchList, function ($r) use ($user_id, $type_id) {
-    if ($r['status_id'] != 1) return false; // only pending
-    if ($type_id == 1) return $r['user_id'] == $user_id; // type 1 sees only their own
-    return true; // type 2,3,4 sees all
+    // Only show pending research (status_id = 1)
+    if ($r['status_id'] != 1) return false;
+    
+    // Type 1 (Researcher): sees only their own pending research
+    if ($type_id == 1) {
+        return $r['user_id'] == $user_id;
+    }
+    
+    // Type 2 (Section Head): sees ALL pending research
+    if ($type_id == 2) {
+        return true;
+    }
+    
+    // Type 4 (Admin): sees ALL pending research (view-only)
+    if ($type_id == 4) {
+        return true;
+    }
+    
+    // Type 3 (Div Chief), Type 5 (Records), Type 6 (Exec Dir): do NOT see pending
+    return false;
 });
 
-// Handle Approve/Revise only for type_id = 2
-if ($type_id == 2 && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'], $_POST['research_id'])) {
+// Handle Section Head actions (Approve/Revise/Cancel)
+if ($type_id == 2 && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['research_id'])) {
     $researchId = intval($_POST['research_id']);
-    $newStatus = intval($_POST['update_status']);
-    $comment = $_POST['comment'] ?? null;
-    $complianceFile = null;
-
-    if ($newStatus === 3) {
+    
+    // Approve
+    if (isset($_POST['update_status']) && $_POST['update_status'] == 2) {
+        $db->updateResearchStatusExtended($researchId, 2, $user_id, null, null);
+        $alert = ['icon' => 'success', 'title' => 'Approved!', 'text' => 'Research approved successfully.', 'redirect' => 'pending.php'];
+    }
+    
+    // Revise
+    elseif (isset($_POST['update_status']) && $_POST['update_status'] == 3) {
+        $comment = $_POST['comment'] ?? null;
+        $complianceFile = null;
 
         if (empty($comment)) {
-            $alert = [
-                'icon' => 'error',
-                'title' => 'Comment Required',
-                'text' => 'Please enter a comment.',
-                'redirect' => 'pending.php'
-            ];
-            return;
+            $alert = ['icon' => 'error', 'title' => 'Comment Required', 'text' => 'Please enter a comment.', 'redirect' => 'pending.php'];
+        } elseif (!isset($_FILES['compliance']) || $_FILES['compliance']['error'] !== 0) {
+            $alert = ['icon' => 'error', 'title' => 'Compliance Required', 'text' => 'Please upload a compliance PDF file.', 'redirect' => 'pending.php'];
+        } else {
+            $targetDir = __DIR__ . "/compliance/";
+            if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
+
+            $originalName = basename($_FILES['compliance']['name']);
+            $safeName = preg_replace('/[^A-Za-z0-9_.-]/', '_', $originalName);
+            $filename = time() . '_' . $safeName;
+            $targetFile = $targetDir . $filename;
+
+            $fileType = mime_content_type($_FILES['compliance']['tmp_name']);
+            if ($fileType !== 'application/pdf') {
+                $alert = ['icon' => 'error', 'title' => 'Invalid File', 'text' => 'Compliance file must be a PDF.', 'redirect' => 'pending.php'];
+            } elseif (!move_uploaded_file($_FILES['compliance']['tmp_name'], $targetFile)) {
+                $alert = ['icon' => 'error', 'title' => 'Upload Failed', 'text' => 'Unable to upload compliance PDF.', 'redirect' => 'pending.php'];
+            } else {
+                $complianceFile = $filename;
+                $db->updateResearchStatusExtended($researchId, 3, $user_id, $comment, $complianceFile);
+                $alert = ['icon' => 'success', 'title' => 'Revised!', 'text' => 'Research sent for revision.', 'redirect' => 'pending.php'];
+            }
         }
-
-        if (!isset($_FILES['compliance']) || $_FILES['compliance']['error'] !== 0) {
-            $alert = [
-                'icon' => 'error',
-                'title' => 'Compliance Required',
-                'text' => 'Please upload a compliance PDF file.',
-                'redirect' => 'pending.php'
-            ];
-            return;
-        }
-
-        $targetDir = __DIR__ . "/compliance/";
-        if (!is_dir($targetDir)) {
-            mkdir($targetDir, 0777, true);
-        }
-
-        $originalName = basename($_FILES['compliance']['name']);
-        $safeName = preg_replace('/[^A-Za-z0-9_.-]/', '_', $originalName);
-        $filename = time() . '_' . $safeName;
-        $targetFile = $targetDir . $filename;
-
-        $fileType = mime_content_type($_FILES['compliance']['tmp_name']);
-        if ($fileType !== 'application/pdf') {
-            $alert = [
-                'icon' => 'error',
-                'title' => 'Invalid File',
-                'text' => 'Compliance file must be a PDF.',
-                'redirect' => 'pending.php'
-            ];
-            return;
-        }
-
-        if (!move_uploaded_file($_FILES['compliance']['tmp_name'], $targetFile)) {
-            $alert = [
-                'icon' => 'error',
-                'title' => 'Upload Failed',
-                'text' => 'Unable to upload compliance PDF.',
-                'redirect' => 'pending.php'
-            ];
-            return;
-        }
-
-        $complianceFile = $filename;
     }
-
-    // ================= UPDATE STATUS =================
-    $db->updateResearchStatusExtended(
-        $researchId,
-        $newStatus,
-        $user_id,
-        $comment,
-        $complianceFile
-    );
-
-    $alert = [
-        'icon' => 'success',
-        'title' => 'Updated!',
-        'text' => 'Research status updated successfully.',
-        'redirect' => 'pending.php'
-    ];
+    
+    // Cancel
+    elseif (isset($_POST['cancel_research'])) {
+        $comment = $_POST['cancel_comment'] ?? '';
+        if (empty($comment)) {
+            $alert = ['icon' => 'error', 'title' => 'Comment Required', 'text' => 'Please provide a reason for cancellation.', 'redirect' => 'pending.php'];
+        } else {
+            $db->cancelResearch($researchId, $user_id, $type_id, $comment);
+            $alert = ['icon' => 'success', 'title' => 'Cancelled!', 'text' => 'Research has been cancelled.', 'redirect' => 'pending.php'];
+        }
+    }
 }
 
 // Add team leader, decided by names, and type name
@@ -191,32 +181,35 @@ foreach ($researchList as $key => $research) {
                                                 <?php else: ?> N/A <?php endif; ?>
                                             </td>
                                             <td>
-                                                <?php
-                                                if ($research['status_id'] == 3)
-                                                    echo '<span class="badge bg-info">Revision</span>';
-                                                else
-                                                    echo '<span class="badge bg-warning">Pending</span>';
-                                                ?>
+                                                <span class="badge bg-warning">Pending</span>
                                             </td>
                                             <td><?= htmlspecialchars($research['decided_by']) ?></td>
                                             <td><?= htmlspecialchars($research['type_name']) ?></td>
 
                                             <?php if ($type_id == 2): ?>
+                                                <!-- Section Head Actions -->
                                                 <td>
-                                                    <div class="d-flex gap-2">
-                                                        <form method="POST">
-                                                            <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
-                                                            <button type="submit" name="update_status" value="2" class="btn btn-success btn-sm">Approve</button>
-                                                        </form>
-                                                        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#reviseModal<?= $research['id'] ?>">Revision</button>
-                                                    </div>
+                                                    <form method="POST" class="d-inline mb-1">
+                                                        <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                                                        <button type="submit" name="update_status" value="2" class="btn btn-success btn-sm">
+                                                            <i class="fas fa-check"></i> Approve
+                                                        </button>
+                                                    </form><br>
+                                                    
+                                                    <button type="button" class="btn btn-warning btn-sm mb-1" data-bs-toggle="modal" data-bs-target="#reviseModal<?= $research['id'] ?>">
+                                                        <i class="fas fa-edit"></i> Revise
+                                                    </button><br>
+                                                    
+                                                    <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#cancelModal<?= $research['id'] ?>">
+                                                        <i class="fas fa-times"></i> Cancel
+                                                    </button>
 
                                                     <!-- Revise Modal -->
                                                     <div class="modal fade" id="reviseModal<?= $research['id'] ?>" tabindex="-1">
                                                         <div class="modal-dialog">
                                                             <form method="POST" enctype="multipart/form-data" class="modal-content">
                                                                 <div class="modal-header">
-                                                                    <h5 class="modal-title">Revision Research</h5>
+                                                                    <h5 class="modal-title">Revise Research</h5>
                                                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                                 </div>
                                                                 <div class="modal-body">
@@ -224,7 +217,7 @@ foreach ($researchList as $key => $research) {
                                                                     <input type="hidden" name="update_status" value="3">
                                                                     <div class="mb-3">
                                                                         <label>Comment (Required)</label>
-                                                                        <textarea class="form-control" name="comment" required></textarea>
+                                                                        <textarea class="form-control" name="comment" rows="3" required></textarea>
                                                                     </div>
                                                                     <div class="mb-3">
                                                                         <label>Upload Compliance PDF (Required)</label>
@@ -232,7 +225,32 @@ foreach ($researchList as $key => $research) {
                                                                     </div>
                                                                 </div>
                                                                 <div class="modal-footer">
-                                                                    <button type="submit" class="btn btn-danger">Submit Revision</button>
+                                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                                    <button type="submit" class="btn btn-warning">Submit Revision</button>
+                                                                </div>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Cancel Modal -->
+                                                    <div class="modal fade" id="cancelModal<?= $research['id'] ?>" tabindex="-1">
+                                                        <div class="modal-dialog">
+                                                            <form method="POST" class="modal-content">
+                                                                <div class="modal-header">
+                                                                    <h5 class="modal-title">Cancel Research</h5>
+                                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                                </div>
+                                                                <div class="modal-body">
+                                                                    <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                                                                    <input type="hidden" name="cancel_research" value="1">
+                                                                    <div class="mb-3">
+                                                                        <label>Reason for Cancellation (Required)</label>
+                                                                        <textarea class="form-control" name="cancel_comment" rows="3" required placeholder="Explain why this research is being cancelled..."></textarea>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="modal-footer">
+                                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                                    <button type="submit" class="btn btn-danger">Cancel Research</button>
                                                                 </div>
                                                             </form>
                                                         </div>

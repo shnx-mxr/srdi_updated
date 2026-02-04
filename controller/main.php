@@ -62,66 +62,62 @@ $this->con = mysqli_connect('localhost', 'root', '', 'srdi', 3306);
 
 
     // Register a new user (NO ROLE)
-    public function registerUser($firstname, $middlename, $lastname, $email, $password, $address)
-    {
-        $firstname  = $this->con->real_escape_string($firstname);
-        $middlename = $this->con->real_escape_string($middlename);
-        $lastname   = $this->con->real_escape_string($lastname);
-        $email      = $this->con->real_escape_string($email);
-        $address    = $this->con->real_escape_string($address);
+public function registerUser($firstname, $middlename, $lastname, $email, $password, $address, $type_id, $branch = null)
+{
+    $firstname  = $this->con->real_escape_string($firstname);
+    $middlename = $this->con->real_escape_string($middlename);
+    $lastname   = $this->con->real_escape_string($lastname);
+    $email      = $this->con->real_escape_string($email);
+    $address    = $this->con->real_escape_string($address);
+   $branch     = $this->con->real_escape_string($branch);
+    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+    $status_id = 1; // still default
 
-        // Type_id = 1, status_id = 1
-        $type_id = 1;
-        $status_id = 1;
+ $stmt = $this->con->prepare("
+    INSERT INTO employee
+    (firstname, middlename, lastname, email, password, address, type_id, status_id, branch)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+");
 
-        $stmt = $this->con->prepare("
-            INSERT INTO employee
-            (firstname, middlename, lastname, email, password, address, type_id, status_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ");
+$stmt->bind_param(
+    "ssssssiss",
+    $firstname,
+    $middlename,
+    $lastname,
+    $email,
+    $hashedPassword,
+    $address,
+    $type_id,
+    $status_id,
+    $branch
+);
 
-        $stmt->bind_param(
-            "ssssssii",
-            $firstname,
-            $middlename,
-            $lastname,
-            $email,
-            $hashedPassword,
-            $address,
-            $type_id,
-            $status_id
-        );
+    $success = $stmt->execute();
 
-        $success = $stmt->execute();
+    if ($success) {
+        $userId = $this->con->insert_id;
+        $this->insertLog($userId, 'User registered');
 
- if ($success) {
-    $userId = $this->con->insert_id;
-    $this->insertLog($userId, 'User registered');
-
-    // Insert a notification for the new user
-    $this->insertNotification($userId, "Welcome, $firstname! Your account has been created.");
-
-    // 👇 UPDATED: Notify admins with redirect to employee pending page
-    $result = $this->con->query("SELECT id FROM employee WHERE type_id IN (2, 4)");
-    if ($result) {
-        while ($admin = $result->fetch_assoc()) {
-            // 👇 Added research_id=null and notification_type='employee_pending'
-            $stmt = $this->con->prepare("
-                INSERT INTO notifications (user_id, message, research_id, notification_type, redirect_url, status, created_at) 
-                VALUES (?, ?, NULL, 'employee_pending', 'employeepending.php', 0, NOW())
-            ");
-            $message = "New researcher pending approval: $firstname $lastname ($email)";
-            $stmt->bind_param("is", $admin['id'], $message);
-            $stmt->execute();
-            $stmt->close();
+        // Notifications for Admins/Section Heads
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id IN (2, 4)");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $stmt2 = $this->con->prepare("
+                    INSERT INTO notifications (user_id, message, research_id, notification_type, redirect_url, status, created_at) 
+                    VALUES (?, ?, NULL, 'employee_pending', 'employeepending.php', 0, NOW())
+                ");
+                $message = "New employee pending approval: $firstname $lastname ($email)";
+                $stmt2->bind_param("is", $admin['id'], $message);
+                $stmt2->execute();
+                $stmt2->close();
+            }
         }
     }
+
+    return $success;
 }
 
-return $success;
-    }
 
     // Insert a notification
    public function insertNotification($user_id, $message, $research_id = null, $notification_type = null)
@@ -602,44 +598,57 @@ return $success;
         $stmt->close();
     }
 
-   public function updateResearchStatusExtended($research_id, $status_id, $updatedByUserId, $comment = null, $complianceFile = null)
+    // Get user's type_id
+private function getUserTypeId($user_id)
+{
+    $stmt = $this->con->prepare("SELECT type_id FROM employee WHERE id = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $result ? (int)$result['type_id'] : 0;
+}
+public function updateResearchStatusExtended($research_id, $status_id, $updatedByUserId, $comment = null, $complianceFile = null)
 {
     $research_id = intval($research_id);
     $status_id = intval($status_id);
     $updatedByUserId = intval($updatedByUserId);
+    
+    // Get user's type_id
+    $userTypeId = $this->getUserTypeId($updatedByUserId);
 
     switch ($status_id) {
-        case 2: // Approved
+        case 2: // Approved - UPDATE desisyon_id and decided_by_role
             $statusText = "Approved";
             $notifType = "approved";
             $stmt = $this->con->prepare("
                 UPDATE research 
-                SET status_id = ?, desisyon_id = ?, comment = NULL, compliance = NULL, updated_at = NOW()
+                SET status_id = ?, desisyon_id = ?, decided_by_role = ?, comment = NULL, compliance = NULL, updated_at = NOW()
                 WHERE id = ?
             ");
-            $stmt->bind_param("iii", $status_id, $updatedByUserId, $research_id);
+            $stmt->bind_param("iiii", $status_id, $updatedByUserId, $userTypeId, $research_id);
             break;
 
-        case 3: // Revised
+        case 3: // Revised - UPDATE decided_by_role
             $statusText = "Revised";
             $notifType = "revised";
             $stmt = $this->con->prepare("
                 UPDATE research 
-                SET status_id = ?, desisyon_id = ?, comment = ?, compliance = ?, updated_at = NOW()
+                SET status_id = ?, desisyon_id = ?, decided_by_role = ?, comment = ?, compliance = ?, updated_at = NOW()
                 WHERE id = ?
             ");
-            $stmt->bind_param("iissi", $status_id, $updatedByUserId, $comment, $complianceFile, $research_id);
+            $stmt->bind_param("iiissi", $status_id, $updatedByUserId, $userTypeId, $comment, $complianceFile, $research_id);
             break;
 
-        case 4: // Rejected/Cancelled
+        case 4: // Cancelled
             $statusText = "Cancelled";
             $notifType = "cancelled";
             $stmt = $this->con->prepare("
                 UPDATE research 
-                SET status_id = ?, desisyon_id = ?, comment = ?, compliance = ?, updated_at = NOW()
+                SET status_id = ?, desisyon_id = ?, decided_by_role = ?, comment = ?, compliance = ?, updated_at = NOW()
                 WHERE id = ?
             ");
-            $stmt->bind_param("iissi", $status_id, $updatedByUserId, $comment, $complianceFile, $research_id);
+            $stmt->bind_param("iiissi", $status_id, $updatedByUserId, $userTypeId, $comment, $complianceFile, $research_id);
             break;
 
         case 5: // Published
@@ -647,10 +656,10 @@ return $success;
             $notifType = "published";
             $stmt = $this->con->prepare("
                 UPDATE research 
-                SET status_id = ?, desisyon_id = ?, updated_at = NOW()
+                SET status_id = ?, desisyon_id = ?, decided_by_role = ?, updated_at = NOW()
                 WHERE id = ?
             ");
-            $stmt->bind_param("iii", $status_id, $updatedByUserId, $research_id);
+            $stmt->bind_param("iiii", $status_id, $updatedByUserId, $userTypeId, $research_id);
             break;
 
         default:
@@ -671,16 +680,56 @@ return $success;
     $title = stripslashes($info['title']);
     $updater = $this->getEmployeeName($updatedByUserId);
 
-    // Notification message
-    if ($status_id === 3) {
+    // Notification logic based on status
+    if ($status_id === 5) {
+        // Published - Notify EVERYONE
+        
+        // 1. Notify Researcher (owner)
+        $message = "Congratulations! Your research '{$title}' has been published by {$updater}. You can now add publication details.";
+        $this->insertNotification($owner, $message, $research_id, $notifType);
+        
+        // 2. Notify Records (type_id = 5)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 5");
+        if ($result) {
+            while ($records = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been published by {$updater}.";
+                $this->insertNotification($records['id'], $message, $research_id, $notifType);
+            }
+        }
+        
+        // 3. Notify Section Head (type_id = 2)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
+        if ($result) {
+            while ($secHead = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been published by {$updater}.";
+                $this->insertNotification($secHead['id'], $message, $research_id, $notifType);
+            }
+        }
+        
+        // 4. Notify Division Chief (type_id = 3)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
+        if ($result) {
+            while ($divChief = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been published by {$updater}.";
+                $this->insertNotification($divChief['id'], $message, $research_id, $notifType);
+            }
+        }
+        
+    } elseif ($status_id === 3) {
+        // Revision - Notify owner only
         $reason = $comment ?: 'required revisions';
-        $message = "Your research must be {$statusText} due to {$reason}, updated by {$updater}.";
+        $message = "Your research '{$title}' needs revision. Reason: {$reason}. Updated by {$updater}.";
+        $this->insertNotification($owner, $message, $research_id, $notifType);
+    } elseif ($status_id === 2) {
+        // Approved - Notify owner
+        $message = "Your research '{$title}' has been approved by {$updater}.";
+        $this->insertNotification($owner, $message, $research_id, $notifType);
     } else {
+        // Other statuses - Notify owner
         $message = "Your research '{$title}' has been {$statusText} by {$updater}.";
+        $this->insertNotification($owner, $message, $research_id, $notifType);
     }
 
-    // 🎯 UPDATED: Pass research_id and notification_type
-    $this->insertNotification($owner, $message, $research_id, $notifType);
     $this->insertLog($updatedByUserId, "Updated research '{$title}' to {$statusText}");
 
     return true;
@@ -695,20 +744,50 @@ return $success;
         return $stmt->execute();
     }
     // In Main.php inside your db class
-    public function getEmployeesByStatus($statusId = 1)
-    {
-        $statusId = intval($statusId); // sanitize input
-        $sql = "SELECT * FROM employee WHERE status_id = $statusId";
-        $result = $this->con->query($sql);
+    // public function getEmployeesByStatus($statusId = 1)
+    // {
+    //     $statusId = intval($statusId); // sanitize input
+    //     $sql = "SELECT * FROM employee WHERE status_id = $statusId";
+    //     $result = $this->con->query($sql);
 
-        $employees = [];
-        if ($result && $result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
-                $employees[] = $row;
-            }
+    //     $employees = [];
+    //     if ($result && $result->num_rows > 0) {
+    //         while ($row = $result->fetch_assoc()) {
+    //             $employees[] = $row;
+    //         }
+    //     }
+    //     return $employees;
+    // }
+
+
+    public function getEmployeesByStatus($statusId = 1, $limit = 10, $offset = 0)
+{
+    $statusId = intval($statusId); // sanitize input
+    $limit = intval($limit);
+    $offset = intval($offset);
+
+    // Prepare query with LIMIT and OFFSET
+    $sql = "SELECT * FROM employee WHERE status_id = $statusId ORDER BY created_at DESC LIMIT $limit OFFSET $offset";
+    $result = $this->con->query($sql);
+
+    $employees = [];
+    if ($result && $result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $employees[] = $row;
         }
-        return $employees;
     }
+    return $employees;
+}
+
+// Optional: helper function to count total employees for pagination
+public function countEmployeesByStatus($statusId = 1)
+{
+    $statusId = intval($statusId);
+    $sql = "SELECT COUNT(*) AS total FROM employee WHERE status_id = $statusId";
+    $result = $this->con->query($sql);
+    $row = $result->fetch_assoc();
+    return $row['total'] ?? 0;
+}
 
     // Update employee status
     // Update employee status with log and notification
@@ -856,20 +935,46 @@ public function sendToRecords($research_id, $div_chief_id)
     $research_id = (int)$research_id;
     $div_chief_id = (int)$div_chief_id;
     
-    // Research is already approved (status = 2), just flag it for Records
-    // No status change needed
+    // Get Div Chief's type_id
+    $divChiefTypeId = $this->getUserTypeId($div_chief_id);
+    
+    // Mark as sent to Records AND update decided_by to Div Chief
+    $stmt = $this->con->prepare("
+        UPDATE research 
+        SET sent_to_records = 1,
+            desisyon_id = ?,
+            decided_by_role = ?
+        WHERE id = ?
+    ");
+    $stmt->bind_param("iii", $div_chief_id, $divChiefTypeId, $research_id);
+    $stmt->execute();
+    $stmt->close();
     
     // Get research info
     $research = $this->getResearchById($research_id);
     $title = $research['title'];
+    $ownerId = $research['user_id'];
     $divChiefName = $this->getEmployeeName($div_chief_id);
     
-    // Notify Records (type_id = 5)
+    // 1. Notify Records (type_id = 5)
     $result = $this->con->query("SELECT id FROM employee WHERE type_id = 5");
     if ($result) {
         while ($records = $result->fetch_assoc()) {
             $message = "Research '{$title}' has been sent by Division Chief ($divChiefName) for processing.";
             $this->insertNotification($records['id'], $message, $research_id, 'approved');
+        }
+    }
+    
+    // 2. Notify Researcher (owner)
+    $message = "Your research '{$title}' has been sent to Records by Division Chief ($divChiefName).";
+    $this->insertNotification($ownerId, $message, $research_id, 'approved');
+    
+    // 3. Notify Section Head (type_id = 2)
+    $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
+    if ($result) {
+        while ($secHead = $result->fetch_assoc()) {
+            $message = "Research '{$title}' has been sent to Records by Division Chief ($divChiefName).";
+            $this->insertNotification($secHead['id'], $message, $research_id, 'approved');
         }
     }
     
@@ -880,8 +985,7 @@ public function sendToRecords($research_id, $div_chief_id)
 }
 
 
-
-
+// Exec Dir rejects research
 // Exec Dir rejects research
 public function rejectByExecDir($research_id, $exec_user_id, $comment)
 {
@@ -889,13 +993,14 @@ public function rejectByExecDir($research_id, $exec_user_id, $comment)
     $exec_user_id = (int)$exec_user_id;
     $comment = $this->con->real_escape_string($comment);
     
-    // Mark as rejected by exec and reset records flag
+    // Mark as rejected by exec and reset records flag, set decided_by_role
     $stmt = $this->con->prepare("
         UPDATE research 
         SET rejected_by_exec = 1,
             exec_reject_comment = ?,
             processed_by_records = 0,
-            desisyon_id = ?
+            desisyon_id = ?,
+            decided_by_role = 6
         WHERE id = ?
     ");
     $stmt->bind_param("sii", $comment, $exec_user_id, $research_id);
@@ -914,13 +1019,13 @@ public function rejectByExecDir($research_id, $exec_user_id, $comment)
         if ($result) {
             while ($records = $result->fetch_assoc()) {
                 $message = "Research '{$title}' has been rejected by Exec Dir ($execName). Please process and forward.";
-                $this->insertNotification($records['id'], $message, $research_id, 'revised');
+                $this->insertNotification($records['id'], $message, $research_id, 'approved');
             }
         }
         
         // Notify researcher
-        $ownerMessage = "Your research '{$title}' has been rejected by Executive Director with comment: {$comment}";
-        $this->insertNotification($ownerId, $ownerMessage, $research_id, 'revised');
+        $ownerMessage = "Your research '{$title}' has been rejected by Executive Director. It will be forwarded for revision after Records processing.";
+        $this->insertNotification($ownerId, $ownerMessage, $research_id, 'approved');
         
         // Log activity
         $this->insertLog($exec_user_id, "Rejected research '{$title}'");
@@ -928,18 +1033,20 @@ public function rejectByExecDir($research_id, $exec_user_id, $comment)
     
     return $success;
 }
-
+// Records forwards rejected research
 // Records forwards rejected research
 public function forwardRejectedResearch($research_id, $records_user_id)
 {
     $research_id = (int)$research_id;
     $records_user_id = (int)$records_user_id;
     
-    // Change status to Revision and mark as processed
+    // Change status to Revision (3), mark as processed, set decided_by_role = 6 (Exec Dir)
     $stmt = $this->con->prepare("
         UPDATE research 
         SET status_id = 3,
-            processed_by_records = 1
+            decided_by_role = 6,
+            processed_by_records = 1,
+            rejected_by_exec = 0
         WHERE id = ?
     ");
     $stmt->bind_param("i", $research_id);
@@ -953,7 +1060,13 @@ public function forwardRejectedResearch($research_id, $records_user_id)
         $ownerId = $research['user_id'];
         $recordsName = $this->getEmployeeName($records_user_id);
         
-        // Notify Section Head (type_id = 2)
+        // Notify EVERYONE (Researcher, Section Head, Division Chief, Exec Dir)
+        
+        // Researcher
+        $message = "Your research '{$title}' (rejected by Exec Dir) has been forwarded by Records. Please revise and resubmit.";
+        $this->insertNotification($ownerId, $message, $research_id, 'revised');
+        
+        // Section Head (type_id = 2)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
         if ($result) {
             while ($secHead = $result->fetch_assoc()) {
@@ -962,7 +1075,7 @@ public function forwardRejectedResearch($research_id, $records_user_id)
             }
         }
         
-        // Notify Division Chief (type_id = 3)
+        // Division Chief (type_id = 3)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
         if ($result) {
             while ($divChief = $result->fetch_assoc()) {
@@ -971,8 +1084,174 @@ public function forwardRejectedResearch($research_id, $records_user_id)
             }
         }
         
+        // Exec Dir (type_id = 6) - for tracking
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 6");
+        if ($result) {
+            while ($execDir = $result->fetch_assoc()) {
+                $message = "Research '{$title}' that you rejected has been forwarded by Records for revision.";
+                $this->insertNotification($execDir['id'], $message, $research_id, 'revised');
+            }
+        }
+        
         // Log activity
         $this->insertLog($records_user_id, "Forwarded rejected research '{$title}' from Exec Dir");
+    }
+    
+    return $success;
+}
+// Cancel research by Section Head or Division Chief
+// Cancel research by Section Head or Division Chief
+public function cancelResearch($research_id, $user_id, $user_type_id, $comment)
+{
+    $research_id = (int)$research_id;
+    $user_id = (int)$user_id;
+    $user_type_id = (int)$user_type_id;
+    $comment = $this->con->real_escape_string($comment);
+    
+    // Update research to cancelled status
+    $stmt = $this->con->prepare("
+        UPDATE research 
+        SET status_id = 4,
+            desisyon_id = ?,
+            decided_by_role = ?,
+            comment = ?,
+            updated_at = NOW()
+        WHERE id = ?
+    ");
+    $stmt->bind_param("iisi", $user_id, $user_type_id, $comment, $research_id);
+    $success = $stmt->execute();
+    $stmt->close();
+    
+    if ($success) {
+        // Get research info
+        $research = $this->getResearchById($research_id);
+        $title = $research['title'];
+        $ownerId = $research['user_id'];
+        $cancellerName = $this->getEmployeeName($user_id);
+        
+        // Notify researcher
+        $message = "Your research '{$title}' has been cancelled by {$cancellerName}. Reason: {$comment}";
+        $this->insertNotification($ownerId, $message, $research_id, 'cancelled');
+        
+        // If cancelled by Div Chief (type_id = 3), notify Section Head too
+        if ($user_type_id == 3) {
+            $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
+            if ($result) {
+                while ($secHead = $result->fetch_assoc()) {
+                    $message = "Research '{$title}' has been cancelled by Division Chief ({$cancellerName}).";
+                    $this->insertNotification($secHead['id'], $message, $research_id, 'cancelled');
+                }
+            }
+        }
+        
+        // Log activity
+        $this->insertLog($user_id, "Cancelled research '{$title}'");
+    }
+    
+    return $success;
+}
+
+// Exec Dir cancels research (goes through Records first)
+// Exec Dir cancels research (goes through Records first)
+public function cancelByExecDir($research_id, $exec_user_id, $comment)
+{
+    $research_id = (int)$research_id;
+    $exec_user_id = (int)$exec_user_id;
+    $comment = $this->con->real_escape_string($comment);
+    
+    // Mark for Records to process
+    $stmt = $this->con->prepare("
+        UPDATE research 
+        SET cancelled_by_exec = 1,
+            exec_cancel_comment = ?,
+            processed_by_records = 0,
+            desisyon_id = ?,
+            decided_by_role = 6
+        WHERE id = ?
+    ");
+    $stmt->bind_param("sii", $comment, $exec_user_id, $research_id);
+    $success = $stmt->execute();
+    $stmt->close();
+    
+    if ($success) {
+        // Get research info
+        $research = $this->getResearchById($research_id);
+        $title = $research['title'];
+        $ownerId = $research['user_id'];
+        $execName = $this->getEmployeeName($exec_user_id);
+        
+        // Notify Records (type_id = 5)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 5");
+        if ($result) {
+            while ($records = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been cancelled by Exec Dir ({$execName}). Please process and forward.";
+                $this->insertNotification($records['id'], $message, $research_id, 'approved');
+            }
+        }
+        
+        // Notify researcher
+        $ownerMessage = "Your research '{$title}' has been cancelled by Executive Director. It will be finalized after Records processing.";
+        $this->insertNotification($ownerId, $ownerMessage, $research_id, 'approved');
+        
+        // Log activity
+        $this->insertLog($exec_user_id, "Cancelled research '{$title}'");
+    }
+    
+    return $success;
+}
+// Records forwards cancelled research
+// Records forwards cancelled research
+public function forwardCancelledResearch($research_id, $records_user_id)
+{
+    $research_id = (int)$research_id;
+    $records_user_id = (int)$records_user_id;
+    
+    // Change status to Cancelled (4), mark as processed, set decided_by_role = 6 (Exec Dir)
+    $stmt = $this->con->prepare("
+        UPDATE research 
+        SET status_id = 4,
+            decided_by_role = 6,
+            processed_by_records = 1,
+            cancelled_by_exec = 0
+        WHERE id = ?
+    ");
+    $stmt->bind_param("i", $research_id);
+    $success = $stmt->execute();
+    $stmt->close();
+    
+    if ($success) {
+        // Get research info
+        $research = $this->getResearchById($research_id);
+        $title = $research['title'];
+        $recordsName = $this->getEmployeeName($records_user_id);
+        
+        // Notify EVERYONE (Researcher, Sec Head, Div Chief, Exec Dir)
+        
+        // Researcher
+        $ownerId = $research['user_id'];
+        $message = "Your research '{$title}' has been cancelled by Executive Director.";
+        $this->insertNotification($ownerId, $message, $research_id, 'cancelled');
+        
+        // Section Head + Division Chief
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id IN (2, 3)");
+        if ($result) {
+            while ($user = $result->fetch_assoc()) {
+                $message = "Research '{$title}' (cancelled by Exec Dir) has been forwarded by Records.";
+                $this->insertNotification($user['id'], $message, $research_id, 'cancelled');
+            }
+        }
+        
+        // Exec Dir (type_id = 6) - for tracking
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 6");
+        if ($result) {
+            while ($execDir = $result->fetch_assoc()) {
+                $message = "Research '{$title}' that you cancelled has been forwarded by Records.";
+                $this->insertNotification($execDir['id'], $message, $research_id, 'cancelled');
+            }
+        }
+        
+        // Log activity
+        $this->insertLog($records_user_id, "Forwarded cancelled research '{$title}' from Exec Dir");
     }
     
     return $success;

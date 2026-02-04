@@ -37,7 +37,7 @@ $unreadCount = $db->getUnreadNotificationCount($user_id);
 ?>
 
 <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-    <a class="navbar-brand ps-3" href="dashboard.php">SRDI Dashboard</a>
+    <a class="navbar-brand ps-3" href="dashboard.php"><strong>SRDI RDTS</strong></a>
 
     <ul class="navbar-nav ms-auto me-3 me-lg-4">
 

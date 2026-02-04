@@ -3,9 +3,16 @@ session_start();
 require_once "../../controller/Main.php";
 
 $db = new db();
+$employee_type = "";
+
+
 $message = [];
 
-$firstname = $middlename = $lastname = $email = $password = $confirm_password = $address = "";
+$branch = ($employee_type == 2 && isset($_POST['branch'])) ? $_POST['branch'] : null;
+
+$firstname = $middlename = $lastname = $email = $password = $confirm_password = $address = $employee_type = $branch = "";
+$message = [];
+
 
 if (isset($_POST['submit'])) {
     $firstname = trim($_POST['firstname']);
@@ -15,10 +22,16 @@ if (isset($_POST['submit'])) {
     $email = trim($_POST['email']);
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
+    $employee_type = isset($_POST['employee_type']) ? intval($_POST['employee_type']) : 0;
+
+    // ✅ Set branch ONLY after employee_type is known
+    $branch = ($employee_type == 2 && isset($_POST['branch'])) ? trim($_POST['branch']) : null;
 
     // Validation
-    if (!$firstname || !$lastname || !$email || !$password || !$confirm_password || !$address) {
+    if (!$firstname || !$lastname || !$email || !$password || !$confirm_password || !$address || !$employee_type) {
         $message[] = "Please fill in all required fields.";
+    } elseif (!$employee_type || !in_array($employee_type, [1,2,3,4,5,6])) {
+        $message[] = "Please select a valid Employee Type.";
     } elseif ($password !== $confirm_password) {
         $message[] = "Passwords do not match.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -28,7 +41,18 @@ if (isset($_POST['submit'])) {
     } elseif ($db->isEmailExists($email)) {
         $message[] = "Email is already registered.";
     } else {
-        $registered = $db->registerUser($firstname, $middlename, $lastname, $email, $password, $address);
+        // ✅ Pass branch to registerUser
+        $registered = $db->registerUser(
+            $firstname,
+            $middlename,
+            $lastname,
+            $email,
+            $password,
+            $address,
+            $employee_type,
+            $branch // this is now set correctly
+        );
+
         if ($registered) {
             $_SESSION['message'] = 'Registration successful! You may now log in.';
             $_SESSION['message_type'] = 'success';
@@ -39,6 +63,9 @@ if (isset($_POST['submit'])) {
         }
     }
 }
+
+
+
 ?>
 
 <!DOCTYPE html>
@@ -213,6 +240,33 @@ if (isset($_POST['submit'])) {
             margin-bottom: 6px;
             letter-spacing: 0.2px;
         }
+/* Style for select dropdowns */
+select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background: #f8fafc;
+    color: #1e293b;
+    font-family: 'Inter', sans-serif;
+    appearance: none; /* Removes default arrow on some browsers */
+    cursor: pointer;
+}
+
+/* Focus state for select */
+select:focus {
+    outline: none;
+    border-color: #22c55e;
+    background: #ffffff;
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1);
+}
+
+/* Placeholder color for select (optional) */
+select option[value=""] {
+    color: #94a3b8;
+}
 
         input[type="text"],
         input[type="email"],
@@ -408,6 +462,26 @@ if (isset($_POST['submit'])) {
                            value="<?= htmlspecialchars($email) ?>"
                            required>
                 </div>
+<div class="form-group">
+    <label for="employee_type">Employee Type <span class="required">*</span></label>
+    <select id="employee_type" name="employee_type" required>
+        <option value="">Select Employee Type </option>
+        <option value="1" <?= (isset($employee_type) && $employee_type==1) ? 'selected' : '' ?>>Researcher</option>
+        <option value="2" <?= (isset($employee_type) && $employee_type==2) ? 'selected' : '' ?>>Section Head</option>
+        <option value="3" <?= (isset($employee_type) && $employee_type==3) ? 'selected' : '' ?>>Division Chief</option>
+        <option value="5" <?= (isset($employee_type) && $employee_type==5) ? 'selected' : '' ?>>Records</option>
+
+    </select>
+</div>
+<div class="form-group" id="branch-container" style="display:none;">
+    <label for="branch">Select Branch</label>
+    <select id="branch" name="branch">
+        <option value="">Select Branch</option>
+        <option value="Mulberry">Mulberry</option>
+        <option value="Post-Cocoon">Post-Cocoon</option>
+        <option value="Silkworm">Silkworm</option>
+    </select>
+</div>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -477,7 +551,19 @@ if (isset($_POST['submit'])) {
         unset($_SESSION['message_type']);
     }
     ?>
+<script>const employeeTypeSelect = document.getElementById('employee_type');
+const branchContainer = document.getElementById('branch-container');
 
+employeeTypeSelect.addEventListener('change', function() {
+    const typeId = parseInt(this.value);
+
+    if(typeId === 2){ // Section Head
+        branchContainer.style.display = 'block';
+    } else {
+        branchContainer.style.display = 'none';
+    }
+});
+</script>
 </body>
 
 </html>

@@ -20,14 +20,21 @@ $session_user_id = $_SESSION['user_id'] ?? 0;
 
 $db = new db();
 
-// 👇 ADD THIS MAPPING
+
 $typeDisplayNames = [
     1 => 'Researcher',
     2 => 'Section Head',
     3 => 'Division Chief',
-    4 => 'Admin'
+    4 => 'Admin',
+    5 => 'Records',
+    6 => 'Executive Head'
 ];
 
+$cleanFullname = preg_replace(
+    '/^(Researcher|Section Head|Division Chief|Admin)\s+/i',
+    '',
+    $fullname
+);
 // Use the mapping instead of direct DB value
 $typeName = $typeDisplayNames[$type_id] ?? 'Unknown Type';
 
@@ -103,7 +110,10 @@ $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
                 <div class="container-fluid px-4">
                     <h1 class="mt-4">Dashboard</h1>
                     <ol class="breadcrumb mb-4">
-            <li class="breadcrumb-item active">Hi, <strong><?= htmlspecialchars($fullname) ?></strong>!</li>
+<li class="breadcrumb-item active">
+    Hi, <strong><?= htmlspecialchars($typeName . ' ' . $cleanFullname) ?></strong>!
+</li>
+
                     </ol>
 
                     <!-- Status Cards -->
