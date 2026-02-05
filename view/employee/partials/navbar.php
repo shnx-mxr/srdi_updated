@@ -1,39 +1,14 @@
 <?php
-//session_start(); I removed  bec it was causing some error and was called twice
 require_once "../../controller/Main.php";
 
 $db = new db();
-
-if (isset($_GET['mark_read'])) {
-
-    $user_id = $_SESSION['user_id'] ?? 0;
-    $type_id = $_SESSION['type_id'] ?? 0;
-
-    $db->markNotificationsAsRead($user_id, $type_eid);
-
-    echo "OK";
-    exit;
-}
 
 $fullname = $_SESSION['fullname'] ?? 'User';
 $user_id = $_SESSION['user_id'] ?? 0;
 $type_id = $_SESSION['type_id'] ?? 0;
 
-
 $notifications = $db->getNotifications($user_id, 10);
-
-
-
-// I NEED TO COMMENT THIS PART BEC. THE COUNTING ISN'T ACCURATE
-// $unreadCount = 0;
-// foreach ($notifications as $notif) {
-//     if ($notif['status'] == 0) {
-//         $unreadCount++;
-//     }
-// }
-
 $unreadCount = $db->getUnreadNotificationCount($user_id);
-
 ?>
 
 <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
@@ -48,9 +23,9 @@ $unreadCount = $db->getUnreadNotificationCount($user_id);
                 <i class="fas fa-bell fa-fw"></i>
 
                 <?php if ($unreadCount > 0): ?>
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="notif-badge">
                         <?= $unreadCount ?>
-                        <span class="visibly-hidden">unread notifications</span>
+                        <span class="visually-hidden">unread notifications</span>
                     </span>
                 <?php endif; ?>
 
@@ -69,13 +44,18 @@ $unreadCount = $db->getUnreadNotificationCount($user_id);
                     <?php foreach ($notifications as $notif): ?>
                         <li>
                             <?php 
-                            // 👈 Check kung may redirect_url, kung wala use '#'
-                            $href = !empty($notif['redirect_url']) ? htmlspecialchars($notif['redirect_url']) : '#';
-                            // 👈 Bold if unread
+                            // Build redirect URL with notification ID
+                            if (!empty($notif['redirect_url'])) {
+                                $href = "mark_notification_read.php?id=" . $notif['id'] . "&redirect=" . urlencode($notif['redirect_url']);
+                            } else {
+                                $href = "#";
+                            }
+                            
+                            // Bold if unread
                             $boldClass = $notif['status'] == 0 ? 'fw-bold' : '';
+                            $bgClass = $notif['status'] == 0 ? 'bg-light' : '';
                             ?>
-                            <!-- 👈 Changed href from "#" to dynamic $href -->
-                            <a class="dropdown-item <?= $boldClass ?> mb-1" href="<?= $href ?>">
+                            <a class="dropdown-item <?= $boldClass ?> <?= $bgClass ?> mb-1" href="<?= $href ?>">
                                 <small class="text-muted"><?= date('M d, Y H:i', strtotime($notif['created_at'])) ?></small><br>
                                 <span><?= htmlspecialchars($notif['message']) ?></span>
                             </a>
@@ -93,26 +73,46 @@ $unreadCount = $db->getUnreadNotificationCount($user_id);
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
                 <li><a class="dropdown-item" href="profile.php">Profile</a></li>
-                <li><a class="dropdown-item" href="http://localhost/srdi_updated/view/auth/logout.php">Logout</a></li>
+                <li><a class="dropdown-item" href="../auth/logout.php">Logout</a></li>
             </ul>
         </li>
     </ul>
 </nav>
-
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const bell = document.getElementById("notificationDropdown");
-
-        bell.addEventListener("click", function() {
-
-            fetch("?mark_read=1", {
-                    method: "GET"
-                })
-                .then(res => res.text())
-                .then(data => {
-
-                    document.querySelectorAll('.badge.bg-danger').forEach(el => el.remove());
-                });
+document.addEventListener("DOMContentLoaded", function() {
+    // Handle notification click
+    document.querySelectorAll('.dropdown-item[href*="mark_notification_read"]').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const url = this.href;
+            const urlParams = new URLSearchParams(url.split('?')[1]);
+            const notifId = urlParams.get('id');
+            const redirectUrl = urlParams.get('redirect');
+            
+            // Mark as read via AJAX
+            fetch('mark_notification_read.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'mark_read=1&notification_id=' + notifId
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Update badge count
+                    const badge = document.getElementById('notif-badge');
+                    if (badge) {
+                        if (data.unreadCount > 0) {
+                            badge.textContent = data.unreadCount;
+                        } else {
+                            badge.remove();
+                        }
+                    }
+                    // Redirect to target page
+                    window.location.href = redirectUrl;
+                }
+            });
         });
     });
+});
 </script>

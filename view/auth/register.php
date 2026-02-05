@@ -78,6 +78,7 @@ if (isset($_POST['submit'])) {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -397,6 +398,29 @@ select option[value=""] {
         ::-webkit-scrollbar-thumb:hover {
             background: #16a34a;
         }
+        .password-wrapper {
+    position: relative;
+}
+
+.password-wrapper input {
+    width: 100%;
+    padding-right: 42px;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #666;
+    font-size: 16px;
+}
+
+.toggle-password:hover {
+    color: #000;
+}
+
     </style>
 </head>
 
@@ -410,7 +434,7 @@ select option[value=""] {
                     <img src="https://www.dmmmsu.edu.ph/wp-content/uploads/2019/06/SRDI-Logo.jpg" class="srdi-logo" alt="DMMMSU SRDI Logo">
                 </div>
                 <h1>DMMMSU SRDI</h1>
-                <p>Research Tracking System</p>
+                <p>Research Documents Tracking System</p>
             </div>
         </div>
 
@@ -486,20 +510,28 @@ select option[value=""] {
                 <div class="form-row">
                     <div class="form-group">
                         <label for="password">Password <span class="required">*</span></label>
-                        <input type="password" 
-                               id="password" 
-                               name="password" 
-                               placeholder="Create password"
-                               required>
+                         <div class="password-wrapper">
+            <input type="password"
+                   id="password"
+                   name="password"
+                   placeholder="Create password"
+                   required>
+         <i class="fa-solid fa-eye-slash toggle-password"
+               onclick="togglePassword('password', this)"></i>
+        </div>
                     </div>
 
                     <div class="form-group">
                         <label for="confirm_password">Confirm Password <span class="required">*</span></label>
-                        <input type="password" 
-                               id="confirm_password" 
-                               name="confirm_password" 
-                               placeholder="Confirm password"
-                               required>
+                        <div class="password-wrapper">
+            <input type="password"
+                   id="confirm_password"
+                   name="confirm_password"
+                   placeholder="Confirm password"
+                   required>
+        <i class="fa-solid fa-eye-slash toggle-password"
+               onclick="togglePassword('password', this)"></i>
+        </div>
                     </div>
                 </div>
 
@@ -563,6 +595,22 @@ employeeTypeSelect.addEventListener('change', function() {
         branchContainer.style.display = 'none';
     }
 });
+
+function togglePassword(inputId, icon) {
+    const input = document.getElementById(inputId);
+
+    if (input.type === "password") {
+        // currently hidden → SHOW
+        input.type = "text";
+        icon.classList.remove("fa-eye-slash");
+        icon.classList.add("fa-eye");
+    } else {
+        // currently shown → HIDE
+        input.type = "password";
+        icon.classList.remove("fa-eye");
+        icon.classList.add("fa-eye-slash");
+    }
+}
 </script>
 </body>
 

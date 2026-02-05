@@ -21,7 +21,7 @@ if (isset($_POST['submit'])) {
             $_SESSION['fullname'] = trim($user['firstname'] . ' ' . $user['lastname']);
             $_SESSION['user_role'] = $user['role_name'] ?? 'Unknown';
             $_SESSION['type_id'] = $user['type_id'] ?? 0;
-
+           $_SESSION['branch'] = $user['branch'] ?? 'Not Assigned';
             $_SESSION['message'] = "Welcome, {$_SESSION['fullname']} ({$_SESSION['user_role']})!";
             $_SESSION['message_type'] = 'success';
 
@@ -40,10 +40,11 @@ if (isset($_POST['submit'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - DMMMSU SRDI Research Tracking</title>
+    <title>Login - SRDI RDTS</title>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -78,7 +79,6 @@ if (isset($_POST['submit'])) {
             max-width: 1400px;
             margin: auto;
             background: #ffffff;
-            border-radius: 24px;
             overflow: hidden;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             position: relative;
@@ -347,6 +347,45 @@ if (isset($_POST['submit'])) {
         ::-webkit-scrollbar-thumb:hover {
             background: #16a34a;
         }
+        .password-wrapper {
+    position: relative;
+}
+
+.password-wrapper input {
+    width: 100%;
+    padding: 14px 16px;
+    height: 44px;           
+    box-sizing: border-box;
+   border-radius: 12px;
+   border: 2px solid #e2e8f0;
+    font-size: 15px;
+    transition: all 0.3s ease;
+    background: #f8fafc;
+    color: #1e293b;
+    font-family: 'Inter', sans-serif;
+}
+
+
+         
+           
+.password-wrapper input[type="password"]:focus{
+          border-color: #22c55e;
+        }
+
+.toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #666;
+    font-size: 16px;
+}
+
+.toggle-password:hover {
+    color: #000;
+}
+
     </style>
 </head>
 
@@ -360,7 +399,7 @@ if (isset($_POST['submit'])) {
                     <img src="https://www.dmmmsu.edu.ph/wp-content/uploads/2019/06/SRDI-Logo.jpg" class="srdi-logo" alt="DMMMSU SRDI Logo">
                 </div>
                 <h1>DMMMSU SRDI</h1>
-                <p>Research Tracking System</p>
+                <p>Research Documents Tracking System</p>
             </div>
             
             <div class="features">
@@ -398,13 +437,20 @@ if (isset($_POST['submit'])) {
                 </div>
 
                 <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" 
-                           id="password" 
-                           name="password" 
-                           placeholder="Enter your password"
-                           required>
-                </div>
+    <label for="password">Password</label>
+    <div class="password-wrapper">
+        <input type="password"
+               id="password"
+               name="password"
+               placeholder="Enter your password"
+               required>
+<i class="fa-solid fa-eye-slash toggle-password"
+   onclick="toggleLoginPassword(this)"></i>
+
+
+    </div>
+</div>
+
 
                 <button type="submit" name="submit">Sign In</button>
             </form>
@@ -428,6 +474,25 @@ if (isset($_POST['submit'])) {
             });
         </script>
     <?php endif; ?>
+<script>
+function toggleLoginPassword(icon) {
+    const input = icon.previousElementSibling;
+
+    if (input.type === "password") {
+        // currently hidden → SHOW password
+        input.type = "text";
+        icon.classList.remove("fa-eye-slash");
+        icon.classList.add("fa-eye");
+    } else {
+        // currently shown → HIDE password
+        input.type = "password";
+        icon.classList.remove("fa-eye");
+        icon.classList.add("fa-eye-slash");
+    }
+}
+</script>
+
+
 
 </body>
 

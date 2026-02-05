@@ -618,7 +618,7 @@ public function updateResearchStatusExtended($research_id, $status_id, $updatedB
     $userTypeId = $this->getUserTypeId($updatedByUserId);
 
     switch ($status_id) {
-        case 2: // Approved - UPDATE desisyon_id and decided_by_role
+        case 2: // Approved
             $statusText = "Approved";
             $notifType = "approved";
             $stmt = $this->con->prepare("
@@ -629,7 +629,7 @@ public function updateResearchStatusExtended($research_id, $status_id, $updatedB
             $stmt->bind_param("iiii", $status_id, $updatedByUserId, $userTypeId, $research_id);
             break;
 
-        case 3: // Revised - UPDATE decided_by_role
+        case 3: // Revised
             $statusText = "Revised";
             $notifType = "revised";
             $stmt = $this->con->prepare("
@@ -715,19 +715,104 @@ public function updateResearchStatusExtended($research_id, $status_id, $updatedB
             }
         }
         
+        // 5. Notify Admin (type_id = 4)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been published by {$updater}.";
+                $this->insertNotification($admin['id'], $message, $research_id, $notifType);
+            }
+        }
+        
     } elseif ($status_id === 3) {
-        // Revision - Notify owner only
+        // Revision - Notify Researcher, Admin, and others based on who revised
         $reason = $comment ?: 'required revisions';
-        $message = "Your research '{$title}' needs revision. Reason: {$reason}. Updated by {$updater}.";
+        $message = "Your research '{$title}' needs revision. Reason: {$reason}. Revised by {$updater}.";
         $this->insertNotification($owner, $message, $research_id, $notifType);
+        
+        // Notify Admin
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $adminMessage = "Research '{$title}' has been sent for revision by {$updater}.";
+                $this->insertNotification($admin['id'], $adminMessage, $research_id, $notifType);
+            }
+        }
+        
+        // If Section Head revised, notify Div Chief
+        if ($userTypeId == 2) {
+            $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
+            if ($result) {
+                while ($divChief = $result->fetch_assoc()) {
+                    $dcMessage = "Research '{$title}' has been sent for revision by Section Head ({$updater}).";
+                    $this->insertNotification($divChief['id'], $dcMessage, $research_id, $notifType);
+                }
+            }
+        }
+        
+        // If Div Chief revised, notify Section Head
+        if ($userTypeId == 3) {
+            $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
+            if ($result) {
+                while ($secHead = $result->fetch_assoc()) {
+                    $shMessage = "Research '{$title}' has been sent for revision by Division Chief ({$updater}).";
+                    $this->insertNotification($secHead['id'], $shMessage, $research_id, $notifType);
+                }
+            }
+        }
+        
     } elseif ($status_id === 2) {
-        // Approved - Notify owner
+        // Approved - Notify Researcher, Admin, and next person in chain
         $message = "Your research '{$title}' has been approved by {$updater}.";
         $this->insertNotification($owner, $message, $research_id, $notifType);
+        
+        // Notify Admin
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $adminMessage = "Research '{$title}' has been approved by {$updater}.";
+                $this->insertNotification($admin['id'], $adminMessage, $research_id, $notifType);
+            }
+        }
+        
+        // If Section Head approved, notify Div Chief
+        if ($userTypeId == 2) {
+            $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
+            if ($result) {
+                while ($divChief = $result->fetch_assoc()) {
+                    $dcMessage = "Research '{$title}' has been approved by Section Head ({$updater}) and is ready for your review.";
+                    $this->insertNotification($divChief['id'], $dcMessage, $research_id, $notifType);
+                }
+            }
+        }
+        
+    } elseif ($status_id === 4) {
+        // Cancelled - Notify Researcher and Admin
+        $reason = $comment ?: 'no reason provided';
+        $message = "Your research '{$title}' has been cancelled by {$updater}. Reason: {$reason}";
+        $this->insertNotification($owner, $message, $research_id, $notifType);
+        
+        // Notify Admin
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $adminMessage = "Research '{$title}' has been cancelled by {$updater}.";
+                $this->insertNotification($admin['id'], $adminMessage, $research_id, $notifType);
+            }
+        }
     } else {
-        // Other statuses - Notify owner
+        // Other statuses - Notify owner and admin
         $message = "Your research '{$title}' has been {$statusText} by {$updater}.";
         $this->insertNotification($owner, $message, $research_id, $notifType);
+        
+        // Notify Admin
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $adminMessage = "Research '{$title}' status changed to {$statusText} by {$updater}.";
+                $this->insertNotification($admin['id'], $adminMessage, $research_id, $notifType);
+            }
+        }
     }
 
     $this->insertLog($updatedByUserId, "Updated research '{$title}' to {$statusText}");
@@ -911,14 +996,46 @@ public function markProcessedByRecords($research_id, $records_user_id)
         // Get research info
         $research = $this->getResearchById($research_id);
         $title = $research['title'];
+        $ownerId = $research['user_id'];
         $recordsName = $this->getEmployeeName($records_user_id);
         
-        // Notify Exec Dir (type_id = 6)
+        // 1. Notify Exec Dir (type_id = 6)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 6");
         if ($result) {
             while ($execDir = $result->fetch_assoc()) {
                 $message = "Research '{$title}' has been processed by Records ($recordsName) and is ready for your approval.";
                 $this->insertNotification($execDir['id'], $message, $research_id, 'approved');
+            }
+        }
+        
+        // 2. Notify Researcher
+        $message = "Your research '{$title}' has been processed by Records ($recordsName) and is now with Executive Director.";
+        $this->insertNotification($ownerId, $message, $research_id, 'approved');
+        
+        // 3. Notify Section Head (type_id = 2)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
+        if ($result) {
+            while ($secHead = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been processed by Records ($recordsName) and is now with Executive Director.";
+                $this->insertNotification($secHead['id'], $message, $research_id, 'approved');
+            }
+        }
+        
+        // 4. Notify Division Chief (type_id = 3)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
+        if ($result) {
+            while ($divChief = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been processed by Records ($recordsName) and is now with Executive Director.";
+                $this->insertNotification($divChief['id'], $message, $research_id, 'approved');
+            }
+        }
+        
+        // 5. Notify Admin (type_id = 4)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $message = "Research '{$title}' has been processed by Records ($recordsName).";
+                $this->insertNotification($admin['id'], $message, $research_id, 'approved');
             }
         }
         
@@ -928,7 +1045,6 @@ public function markProcessedByRecords($research_id, $records_user_id)
     
     return $success;
 }
-
 // Send research to Records (by Div Chief)
 public function sendToRecords($research_id, $div_chief_id)
 {
@@ -966,15 +1082,24 @@ public function sendToRecords($research_id, $div_chief_id)
     }
     
     // 2. Notify Researcher (owner)
-    $message = "Your research '{$title}' has been sent to Records by Division Chief ($divChiefName).";
+    $message = "Your research '{$title}' has been forwarded to Records by Division Chief ($divChiefName).";
     $this->insertNotification($ownerId, $message, $research_id, 'approved');
     
     // 3. Notify Section Head (type_id = 2)
     $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
     if ($result) {
         while ($secHead = $result->fetch_assoc()) {
-            $message = "Research '{$title}' has been sent to Records by Division Chief ($divChiefName).";
+            $message = "Research '{$title}' has been forwarded to Records by Division Chief ($divChiefName).";
             $this->insertNotification($secHead['id'], $message, $research_id, 'approved');
+        }
+    }
+    
+    // 4. Notify Admin (type_id = 4)
+    $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+    if ($result) {
+        while ($admin = $result->fetch_assoc()) {
+            $message = "Research '{$title}' has been forwarded to Records by Division Chief ($divChiefName).";
+            $this->insertNotification($admin['id'], $message, $research_id, 'approved');
         }
     }
     
@@ -985,6 +1110,7 @@ public function sendToRecords($research_id, $div_chief_id)
 }
 
 
+// Exec Dir rejects research
 // Exec Dir rejects research
 // Exec Dir rejects research
 public function rejectByExecDir($research_id, $exec_user_id, $comment)
@@ -1014,7 +1140,7 @@ public function rejectByExecDir($research_id, $exec_user_id, $comment)
         $ownerId = $research['user_id'];
         $execName = $this->getEmployeeName($exec_user_id);
         
-        // Notify Records (type_id = 5)
+        // 1. Notify Records (type_id = 5)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 5");
         if ($result) {
             while ($records = $result->fetch_assoc()) {
@@ -1023,9 +1149,18 @@ public function rejectByExecDir($research_id, $exec_user_id, $comment)
             }
         }
         
-        // Notify researcher
+        // 2. Notify researcher
         $ownerMessage = "Your research '{$title}' has been rejected by Executive Director. It will be forwarded for revision after Records processing.";
         $this->insertNotification($ownerId, $ownerMessage, $research_id, 'approved');
+        
+        // 3. Notify Admin (type_id = 4)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $adminMessage = "Research '{$title}' has been rejected by Executive Director ($execName).";
+                $this->insertNotification($admin['id'], $adminMessage, $research_id, 'approved');
+            }
+        }
         
         // Log activity
         $this->insertLog($exec_user_id, "Rejected research '{$title}'");
@@ -1035,6 +1170,7 @@ public function rejectByExecDir($research_id, $exec_user_id, $comment)
 }
 // Records forwards rejected research
 // Records forwards rejected research
+ 
 public function forwardRejectedResearch($research_id, $records_user_id)
 {
     $research_id = (int)$research_id;
@@ -1060,36 +1196,45 @@ public function forwardRejectedResearch($research_id, $records_user_id)
         $ownerId = $research['user_id'];
         $recordsName = $this->getEmployeeName($records_user_id);
         
-        // Notify EVERYONE (Researcher, Section Head, Division Chief, Exec Dir)
+        // Notify EVERYONE (Researcher, Section Head, Division Chief, Exec Dir, Admin)
         
-        // Researcher
+        // 1. Researcher
         $message = "Your research '{$title}' (rejected by Exec Dir) has been forwarded by Records. Please revise and resubmit.";
         $this->insertNotification($ownerId, $message, $research_id, 'revised');
         
-        // Section Head (type_id = 2)
+        // 2. Section Head (type_id = 2)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
         if ($result) {
             while ($secHead = $result->fetch_assoc()) {
-                $message = "Research '{$title}' (rejected by Exec Dir) has been forwarded by Records.";
+                $message = "Research '{$title}' (rejected by Exec Dir) has been forwarded by Records for revision.";
                 $this->insertNotification($secHead['id'], $message, $research_id, 'revised');
             }
         }
         
-        // Division Chief (type_id = 3)
+        // 3. Division Chief (type_id = 3)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
         if ($result) {
             while ($divChief = $result->fetch_assoc()) {
-                $message = "Research '{$title}' (rejected by Exec Dir) has been forwarded by Records.";
+                $message = "Research '{$title}' (rejected by Exec Dir) has been forwarded by Records for revision.";
                 $this->insertNotification($divChief['id'], $message, $research_id, 'revised');
             }
         }
         
-        // Exec Dir (type_id = 6) - for tracking
+        // 4. Exec Dir (type_id = 6) - for tracking
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 6");
         if ($result) {
             while ($execDir = $result->fetch_assoc()) {
                 $message = "Research '{$title}' that you rejected has been forwarded by Records for revision.";
                 $this->insertNotification($execDir['id'], $message, $research_id, 'revised');
+            }
+        }
+        
+        // 5. Admin (type_id = 4)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $message = "Research '{$title}' (rejected by Exec Dir) has been forwarded by Records ($recordsName) for revision.";
+                $this->insertNotification($admin['id'], $message, $research_id, 'revised');
             }
         }
         
@@ -1099,6 +1244,7 @@ public function forwardRejectedResearch($research_id, $records_user_id)
     
     return $success;
 }
+// Cancel research by Section Head or Division Chief
 // Cancel research by Section Head or Division Chief
 // Cancel research by Section Head or Division Chief
 public function cancelResearch($research_id, $user_id, $user_type_id, $comment)
@@ -1129,11 +1275,20 @@ public function cancelResearch($research_id, $user_id, $user_type_id, $comment)
         $ownerId = $research['user_id'];
         $cancellerName = $this->getEmployeeName($user_id);
         
-        // Notify researcher
+        // 1. Notify researcher
         $message = "Your research '{$title}' has been cancelled by {$cancellerName}. Reason: {$comment}";
         $this->insertNotification($ownerId, $message, $research_id, 'cancelled');
         
-        // If cancelled by Div Chief (type_id = 3), notify Section Head too
+        // 2. Notify Admin (type_id = 4)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $adminMessage = "Research '{$title}' has been cancelled by {$cancellerName}.";
+                $this->insertNotification($admin['id'], $adminMessage, $research_id, 'cancelled');
+            }
+        }
+        
+        // 3. If cancelled by Div Chief (type_id = 3), notify Section Head too
         if ($user_type_id == 3) {
             $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
             if ($result) {
@@ -1151,7 +1306,7 @@ public function cancelResearch($research_id, $user_id, $user_type_id, $comment)
     return $success;
 }
 
-// Exec Dir cancels research (goes through Records first)
+
 // Exec Dir cancels research (goes through Records first)
 public function cancelByExecDir($research_id, $exec_user_id, $comment)
 {
@@ -1180,7 +1335,7 @@ public function cancelByExecDir($research_id, $exec_user_id, $comment)
         $ownerId = $research['user_id'];
         $execName = $this->getEmployeeName($exec_user_id);
         
-        // Notify Records (type_id = 5)
+        // 1. Notify Records (type_id = 5)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 5");
         if ($result) {
             while ($records = $result->fetch_assoc()) {
@@ -1189,9 +1344,18 @@ public function cancelByExecDir($research_id, $exec_user_id, $comment)
             }
         }
         
-        // Notify researcher
+        // 2. Notify researcher
         $ownerMessage = "Your research '{$title}' has been cancelled by Executive Director. It will be finalized after Records processing.";
         $this->insertNotification($ownerId, $ownerMessage, $research_id, 'approved');
+        
+        // 3. Notify Admin (type_id = 4)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $adminMessage = "Research '{$title}' has been cancelled by Executive Director ($execName).";
+                $this->insertNotification($admin['id'], $adminMessage, $research_id, 'approved');
+            }
+        }
         
         // Log activity
         $this->insertLog($exec_user_id, "Cancelled research '{$title}'");
@@ -1199,7 +1363,6 @@ public function cancelByExecDir($research_id, $exec_user_id, $comment)
     
     return $success;
 }
-// Records forwards cancelled research
 // Records forwards cancelled research
 public function forwardCancelledResearch($research_id, $records_user_id)
 {
@@ -1225,14 +1388,14 @@ public function forwardCancelledResearch($research_id, $records_user_id)
         $title = $research['title'];
         $recordsName = $this->getEmployeeName($records_user_id);
         
-        // Notify EVERYONE (Researcher, Sec Head, Div Chief, Exec Dir)
+        // Notify EVERYONE (Researcher, Sec Head, Div Chief, Exec Dir, Admin)
         
-        // Researcher
+        // 1. Researcher
         $ownerId = $research['user_id'];
         $message = "Your research '{$title}' has been cancelled by Executive Director.";
         $this->insertNotification($ownerId, $message, $research_id, 'cancelled');
         
-        // Section Head + Division Chief
+        // 2. Section Head + Division Chief
         $result = $this->con->query("SELECT id FROM employee WHERE type_id IN (2, 3)");
         if ($result) {
             while ($user = $result->fetch_assoc()) {
@@ -1241,7 +1404,7 @@ public function forwardCancelledResearch($research_id, $records_user_id)
             }
         }
         
-        // Exec Dir (type_id = 6) - for tracking
+        // 3. Exec Dir (type_id = 6) - for tracking
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 6");
         if ($result) {
             while ($execDir = $result->fetch_assoc()) {
@@ -1250,10 +1413,27 @@ public function forwardCancelledResearch($research_id, $records_user_id)
             }
         }
         
+        // 4. Admin (type_id = 4)
+        $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+        if ($result) {
+            while ($admin = $result->fetch_assoc()) {
+                $adminMessage = "Research '{$title}' (cancelled by Exec Dir) has been forwarded by Records ($recordsName).";
+                $this->insertNotification($admin['id'], $adminMessage, $research_id, 'cancelled');
+            }
+        }
+        
         // Log activity
         $this->insertLog($records_user_id, "Forwarded cancelled research '{$title}' from Exec Dir");
     }
     
     return $success;
+}
+// Mark a single notification as read by ID
+public function markNotificationAsRead($notification_id)
+{
+    $notification_id = (int)$notification_id;
+    $stmt = $this->con->prepare("UPDATE notifications SET status = 1 WHERE id = ?");
+    $stmt->bind_param("i", $notification_id);
+    return $stmt->execute();
 }
 }
