@@ -144,7 +144,7 @@ $stmt->bind_param(
                 $redirect_url = 'pending.php';
                 break;
             case 'cancelled':
-                $redirect_url = 'cancelled.php';
+                $redirect_url = 'cancel.php';
                 break;
             default:
                 $redirect_url = 'dashboard.php';
@@ -740,15 +740,15 @@ public function updateResearchStatusExtended($research_id, $status_id, $updatedB
         }
         
         // If Section Head revised, notify Div Chief
-        if ($userTypeId == 2) {
-            $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
-            if ($result) {
-                while ($divChief = $result->fetch_assoc()) {
-                    $dcMessage = "Research '{$title}' has been sent for revision by Section Head ({$updater}).";
-                    $this->insertNotification($divChief['id'], $dcMessage, $research_id, $notifType);
-                }
-            }
-        }
+        // if ($userTypeId == 2) {
+        //     $result = $this->con->query("SELECT id FROM employee WHERE type_id = 3");
+        //     if ($result) {
+        //         while ($divChief = $result->fetch_assoc()) {
+        //             $dcMessage = "Research '{$title}' has been sent for revision by Section Head ({$updater}).";
+        //             $this->insertNotification($divChief['id'], $dcMessage, $research_id, $notifType);
+        //         }
+        //     }
+        // }
         
         // If Div Chief revised, notify Section Head
         if ($userTypeId == 3) {
@@ -1111,8 +1111,6 @@ public function sendToRecords($research_id, $div_chief_id)
 
 
 // Exec Dir rejects research
-// Exec Dir rejects research
-// Exec Dir rejects research
 public function rejectByExecDir($research_id, $exec_user_id, $comment)
 {
     $research_id = (int)$research_id;
@@ -1150,8 +1148,8 @@ public function rejectByExecDir($research_id, $exec_user_id, $comment)
         }
         
         // 2. Notify researcher
-        $ownerMessage = "Your research '{$title}' has been rejected by Executive Director. It will be forwarded for revision after Records processing.";
-        $this->insertNotification($ownerId, $ownerMessage, $research_id, 'approved');
+        // $ownerMessage = "Your research '{$title}' has been rejected by Executive Director. It will be forwarded for revision after Records processing.";
+        // $this->insertNotification($ownerId, $ownerMessage, $research_id, 'approved');
         
         // 3. Notify Admin (type_id = 4)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
@@ -1244,8 +1242,7 @@ public function forwardRejectedResearch($research_id, $records_user_id)
     
     return $success;
 }
-// Cancel research by Section Head or Division Chief
-// Cancel research by Section Head or Division Chief
+
 // Cancel research by Section Head or Division Chief
 public function cancelResearch($research_id, $user_id, $user_type_id, $comment)
 {
@@ -1276,8 +1273,8 @@ public function cancelResearch($research_id, $user_id, $user_type_id, $comment)
         $cancellerName = $this->getEmployeeName($user_id);
         
         // 1. Notify researcher
-        $message = "Your research '{$title}' has been cancelled by {$cancellerName}. Reason: {$comment}";
-        $this->insertNotification($ownerId, $message, $research_id, 'cancelled');
+        // $message = "Your research '{$title}' has been cancelled by {$cancellerName}. Reason: {$comment}";
+        // $this->insertNotification($ownerId, $message, $research_id, 'cancelled');
         
         // 2. Notify Admin (type_id = 4)
         $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");

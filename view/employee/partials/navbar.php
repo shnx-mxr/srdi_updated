@@ -7,7 +7,7 @@ $fullname = $_SESSION['fullname'] ?? 'User';
 $user_id = $_SESSION['user_id'] ?? 0;
 $type_id = $_SESSION['type_id'] ?? 0;
 
-$notifications = $db->getNotifications($user_id, 10);
+$notifications = $db->getNotifications($user_id, 100);
 $unreadCount = $db->getUnreadNotificationCount($user_id);
 ?>
 
