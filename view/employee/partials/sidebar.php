@@ -102,15 +102,23 @@ $type_id = $_SESSION['type_id'] ?? 0;
             </div>
         </div>
 
-        <div class="sb-sidenav-footer">
-            <div class="small">Logged in as:</div>
-            <strong>
-            <?php 
-                $typeNames = [1=>'Researcher', 2=>'Section Head', 3=>'Division Chief', 4=>'Admin', 5=>'Records', 6=>'Exec. Director'];
-                echo $typeNames[$type_id] ?? 'User';
-            ?>
-            </strong>
-        </div>
+ <div class="sb-sidenav-footer">
+    <div class="small">Logged in as:</div>
+    <strong>
+    <?php 
+        $typeNames = [1=>'Researcher', 2=>'Section Head', 3=>'Division Chief', 4=>'Admin', 5=>'Records', 6=>'Exec. Director'];
+        $roleName = $typeNames[$type_id] ?? 'User';
+        
+        // If Section Head, show their branch
+        if ($type_id == 2) {
+            $branch = $_SESSION['branch'] ?? 'Not Assigned';
+            echo $roleName . '<br><small class="text-white">(' . htmlspecialchars($branch) . ')</small>';
+        } else {
+            echo $roleName;
+        }
+    ?>
+    </strong>
+</div>
     </nav>
 </div>
 <style>

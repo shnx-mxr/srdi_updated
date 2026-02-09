@@ -8,7 +8,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $research_id = $_POST['research_id'] ?? 0;
     $title       = $_POST['title'] ?? '';
-    $member      = $_POST['member'] ?? '';
+ $membersArray = $_POST['members'] ?? [];
+$member = implode(", ", $membersArray);
     $startDate   = $_POST['startDate'] ?? null;
     $endDate     = $_POST['endDate'] ?? null;
     $user_id     = $_SESSION['user_id'] ?? 0;
@@ -54,32 +55,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $db->updateResearch($research_id, $updateData);
 
     /* ===== NOTIFICATION ===== */
-$fullName = $_SESSION['fullname'] ?? 'Researcher';
-$research = $db->getResearchById($research_id);
-$researchTitle = $research['title'];
+    $fullName = $_SESSION['fullname'] ?? 'Researcher';
+    $research = $db->getResearchById($research_id);
+    $researchTitle = $research['title'];
     
-    // Notify ONLY Section Head (type_id = 2)
-   $result = $db->getConnection()->query("SELECT id FROM employee WHERE type_id = 2");
-if ($result) {
-    while ($secHead = $result->fetch_assoc()) {
-        $message = "Research '{$researchTitle}' has been resubmitted by {$fullName} after revision.";
-        $db->insertNotification($secHead['id'], $message, $research_id, 'pending');
+    // 1. Notify Section Head of THIS branch only
+    $branchName = $db->typeIdToBranch($research['type_id']);
+    if ($branchName) {
+        $result = $db->getConnection()->query("SELECT id FROM employee WHERE type_id = 2 AND branch = '{$branchName}'");
+        if ($result) {
+            while ($secHead = $result->fetch_assoc()) {
+                $message = "Research '{$researchTitle}' has been resubmitted by {$fullName} after revision.";
+                $db->insertNotification($secHead['id'], $message, $research_id, 'pending');
+            }
+        }
     }
-}
-$result = $db->getConnection()->query("SELECT id FROM employee WHERE type_id = 4");
-if ($result) {
-    while ($admin = $result->fetch_assoc()) {
-        $message = "Research '{$researchTitle}' has been resubmitted by {$fullName} after revision.";
-        $db->insertNotification($admin['id'], $message, $research_id, 'pending');
+    
+    // 2. Notify Admin (type_id = 4)
+    $result = $db->getConnection()->query("SELECT id FROM employee WHERE type_id = 4");
+    if ($result) {
+        while ($admin = $result->fetch_assoc()) {
+            $message = "Research '{$researchTitle}' has been resubmitted by {$fullName} after revision.";
+            $db->insertNotification($admin['id'], $message, $research_id, 'pending');
+        }
     }
-}
-   // 3. Notify researcher (confirmation)
-$message = "Your research '{$researchTitle}' has been resubmitted to Section Head for review.";
-$db->insertNotification($user_id, $message, $research_id, 'pending');
+    
+    // 3. Notify researcher (confirmation)
+    $message = "Your research '{$researchTitle}' has been resubmitted to Section Head for review.";
+    $db->insertNotification($user_id, $message, $research_id, 'pending');
 
-   // Log activity
-$db->insertLog($user_id, "Resubmitted revised research '{$researchTitle}'");
+    // Log activity
+    $db->insertLog($user_id, "Resubmitted revised research '{$researchTitle}'");
 
     header("Location: revised.php?success=1");
     exit;
 }
+?>

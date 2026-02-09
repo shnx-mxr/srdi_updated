@@ -12,7 +12,8 @@ $db = new db();
 $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 
 // Get all research for the user based on type
-$researchList = $db->getResearchForUser($user_id, $type_id);
+$branch = $_SESSION['branch'] ?? null;
+$researchList = $db->getResearchForUser($user_id, $type_id, $branch);
 
 // Filter: Show research that went beyond current role (for tracking)
 // Filter: Show research that went beyond current role (for tracking)

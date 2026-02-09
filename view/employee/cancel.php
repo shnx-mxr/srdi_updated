@@ -11,12 +11,10 @@ $alert = null;
 
 // Research type mapping
 $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
-
 // Get research using the new method
-$researchList = $db->getResearchForUser($user_id, $type_id);
-
-// 👇 UPDATED FILTER: Show based on WHO cancelled AND user role
-// Filter: Show based on WHO cancelled AND user role
+$branch = $_SESSION['branch'] ?? null;
+$researchList = $db->getResearchForUser($user_id, $type_id, $branch);
+// Filter: Show based on WHO cancelled AND user role (RULE 2 - Tracking visibility)
 $researchList = array_filter($researchList, function ($r) use ($type_id, $user_id) {
     // Only show cancelled research (status_id = 4)
     if ($r['status_id'] != 4) return false;
@@ -30,16 +28,16 @@ $researchList = array_filter($researchList, function ($r) use ($type_id, $user_i
     
     // Type 2 (Section Head): 
     // - Sees research they cancelled (decided_by_role = 2)
-    // - DOES NOT see research cancelled by Div Chief (3) or Exec Dir (6)
+    // - AND research cancelled by higher roles that went through them (decided_by_role = 3 or 6)
     if ($type_id == 2) {
-        return $decidedByRole == 2;
+        return in_array($decidedByRole, [2, 3, 6]);
     }
     
     // Type 3 (Div Chief):
     // - Sees research they cancelled (decided_by_role = 3)
-    // - DOES NOT see research cancelled by Exec Dir (6)
+    // - AND research cancelled by Exec Dir (decided_by_role = 6)
     if ($type_id == 3) {
-        return $decidedByRole == 3;
+        return in_array($decidedByRole, [3, 6]);
     }
     
     // Type 4 (Admin): sees all cancelled research
@@ -47,14 +45,15 @@ $researchList = array_filter($researchList, function ($r) use ($type_id, $user_i
         return true;
     }
     
-    // Type 6 (Exec Dir): sees ONLY research they cancelled (decided_by_role = 6)
+    // Type 6 (Exec Dir): sees research they cancelled (decided_by_role = 6)
     if ($type_id == 6) {
         return $decidedByRole == 6;
     }
     
-    // Type 5 (Records): does NOT see cancelled research (unless from Exec Dir, but that's already handled above)
+    // Type 5 (Records): does NOT see cancelled research
     return false;
 });
+
 // Apply type filter if requested
 $filterType = $_GET['type_id'] ?? '';
 if ($filterType && in_array($filterType, [1, 2, 3])) {

@@ -12,7 +12,8 @@ $db = new db();
 $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 
 // Get all research for the user based on type
-$researchList = $db->getResearchForUser($user_id, $type_id);
+$branch = $_SESSION['branch'] ?? null;
+$researchList = $db->getResearchForUser($user_id, $type_id, $branch);
 
 // Filter only Published research (status_id = 5)
 $researchList = array_filter($researchList, function ($r) {

@@ -502,7 +502,7 @@ select option[value=""] {
     <select id="branch" name="branch">
         <option value="">Select Branch</option>
         <option value="Mulberry">Mulberry</option>
-        <option value="Post-Cocoon">Post-Cocoon</option>
+   <option value="Post Cocoon">Post Cocoon</option>
         <option value="Silkworm">Silkworm</option>
     </select>
 </div>
@@ -529,8 +529,8 @@ select option[value=""] {
                    name="confirm_password"
                    placeholder="Confirm password"
                    required>
-        <i class="fa-solid fa-eye-slash toggle-password"
-               onclick="togglePassword('password', this)"></i>
+     <i class="fa-solid fa-eye-slash toggle-password"
+           onclick="togglePassword('confirm_password', this)"></i>
         </div>
                     </div>
                 </div>

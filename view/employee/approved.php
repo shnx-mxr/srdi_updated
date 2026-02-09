@@ -21,34 +21,35 @@ $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 $filterType = isset($_GET['filter_type']) ? intval($_GET['filter_type']) : 0;
 
 // Get all research for user based on type
-$researchList = $db->getResearchForUser($user_id, $type_id);
+$branch = $_SESSION['branch'] ?? null;
+$researchList = $db->getResearchForUser($user_id, $type_id, $branch);
 
 // Filter approved research based on role
 $researchList = array_filter($researchList, function ($r) use ($type_id, $user_id) {
     // Only show approved research (status_id = 2)
     if ($r['status_id'] != 2) return false;
     
-    // Type 1 (Researcher): sees their own approved research
+    // Type 1 (Researcher): sees their own approved research NOT YET sent to Records
     if ($type_id == 1) {
-        return $r['user_id'] == $user_id;
+        return $r['user_id'] == $user_id && $r['sent_to_records'] == 0;
     }
     
-    // Type 2 (Section Head): sees ALL approved research (view-only for tracking)
+    // Type 2 (Section Head): sees approved research NOT YET sent to Records (from their branch)
     if ($type_id == 2) {
-        return true;
+        return $r['sent_to_records'] == 0;
     }
     
     // Type 3 (Div Chief): sees approved research NOT YET sent to Records
     if ($type_id == 3) {
-        return $r['processed_by_records'] == 0 && $r['rejected_by_exec'] == 0 && $r['cancelled_by_exec'] == 0;
+        return $r['sent_to_records'] == 0 && $r['rejected_by_exec'] == 0 && $r['cancelled_by_exec'] == 0;
     }
     
-   // Type 5 (Records): sees research SENT to them by Div Chief OR rejected/cancelled by Exec Dir
-if ($type_id == 5) {
-    return ($r['sent_to_records'] == 1 && $r['processed_by_records'] == 0) ||
-           ($r['rejected_by_exec'] == 1 && $r['processed_by_records'] == 0) ||
-           ($r['cancelled_by_exec'] == 1 && $r['processed_by_records'] == 0);
-}
+    // Type 5 (Records): sees research SENT to them by Div Chief OR rejected/cancelled by Exec Dir
+    if ($type_id == 5) {
+        return ($r['sent_to_records'] == 1 && $r['processed_by_records'] == 0) ||
+               ($r['rejected_by_exec'] == 1 && $r['processed_by_records'] == 0) ||
+               ($r['cancelled_by_exec'] == 1 && $r['processed_by_records'] == 0);
+    }
 
     // Type 6 (Exec Dir): sees approved research ALREADY processed by Records (not rejected/cancelled)
     if ($type_id == 6) {

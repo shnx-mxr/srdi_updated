@@ -13,7 +13,8 @@ $alert = null;
 $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 
 // Get all research for the user based on type
-$researchList = $db->getResearchForUser($user_id, $type_id);
+$branch = $_SESSION['branch'] ?? null;
+$researchList = $db->getResearchForUser($user_id, $type_id, $branch);
 
 // Filter: Show based on WHO revised AND user role
 $researchList = array_filter($researchList, function ($r) use ($type_id, $user_id) {
@@ -79,7 +80,7 @@ foreach ($researchList as $key => $research) {
     <div id="layoutSidenav">
         <?php include 'partials/sidebar.php'; ?>
         <div id="layoutSidenav_content">
-            <main class="container-fluid px-4">
+            < class="container-fluid px-4">
                 <h1 class="mt-4">Revision Research</h1>
 
                 <!-- Type Filter -->
@@ -237,12 +238,41 @@ foreach ($researchList as $key => $research) {
                 <?php else: ?>
                     <p>No revised research found.</p>
                 <?php endif; ?>
-            </main>
+            </>
             <?php include 'partials/footer.php'; ?>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+      <script>
+// Dynamic Member Add/Remove in Edit Modal
+document.addEventListener('click', function(e) {
+    // Add member
+    if (e.target.classList.contains('add-member-modal')) {
+        const researchId = e.target.getAttribute('data-research-id');
+        const container = document.getElementById('member-container-' + researchId);
+        const inputGroup = e.target.closest('.member-input');
+        const newInput = inputGroup.cloneNode(true);
+        
+        // Reset selection
+        newInput.querySelector('select').selectedIndex = 0;
+        
+        // Change button to remove
+        const btn = newInput.querySelector('button');
+        btn.textContent = '-';
+        btn.classList.replace('btn-success', 'btn-danger');
+        btn.classList.replace('add-member-modal', 'remove-member-modal');
+        btn.removeAttribute('data-research-id');
+        
+        container.appendChild(newInput);
+    }
+    
+    // Remove member
+    if (e.target.classList.contains('remove-member-modal')) {
+        e.target.closest('.member-input').remove();
+    }
+});
+</script>
 </body>
 
 </html>

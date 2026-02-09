@@ -13,7 +13,8 @@ $alert = null;
 $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
 
 // Get all research for the user based on type
-$researchList = $db->getResearchForUser($user_id, $type_id);
+$branch = $_SESSION['branch'] ?? null;
+$researchList = $db->getResearchForUser($user_id, $type_id, $branch);
 
 // Filter: Only Section Head and Admin see pending
 $researchList = array_filter($researchList, function ($r) use ($user_id, $type_id) {
