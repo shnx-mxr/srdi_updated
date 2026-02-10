@@ -80,7 +80,7 @@ foreach ($researchList as $key => $research) {
     <div id="layoutSidenav">
         <?php include 'partials/sidebar.php'; ?>
         <div id="layoutSidenav_content">
-            < class="container-fluid px-4">
+            <main class="container-fluid px-4">
                 <h1 class="mt-4">Revision Research</h1>
 
                 <!-- Type Filter -->
@@ -196,11 +196,50 @@ foreach ($researchList as $key => $research) {
                                                                             <input type="text" name="title" class="form-control"
                                                                                 value="<?= htmlspecialchars($research['title']) ?>" required>
                                                                         </div>
-                                                                        <div class="mb-3">
-                                                                            <label>Members:</label>
-                                                                            <input type="text" name="member" class="form-control"
-                                                                                value="<?= htmlspecialchars($research['member']) ?>">
-                                                                        </div>
+                                                                    <div class="mb-3">
+    <label>Members:</label>
+    <div id="member-container-<?= $research['id'] ?>">
+        <?php 
+        $currentMembers = !empty($research['member']) ? explode(", ", $research['member']) : [];
+        $employees = $db->getEmployees();
+        
+        if (!empty($currentMembers)) {
+            foreach ($currentMembers as $index => $currentMember) {
+                $isFirst = $index === 0;
+        ?>
+            <div class="input-group mb-2 member-input">
+                <select name="members[]" class="form-select" required>
+                    <option value="" disabled>Select Member</option>
+                    <?php foreach ($employees as $emp):
+                        $fullName = $emp['firstname'] . ' ' . $emp['lastname'];
+                        $selected = trim($fullName) === trim($currentMember) ? 'selected' : '';
+                    ?>
+                        <option value="<?= htmlspecialchars($fullName) ?>" <?= $selected ?>><?= htmlspecialchars($fullName) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <?php if (!$isFirst): ?>
+                    <button class="btn btn-danger remove-member-modal" type="button">-</button>
+                <?php endif; ?>
+            </div>
+        <?php }
+        } else { ?>
+            <div class="input-group mb-2 member-input">
+                <select name="members[]" class="form-select" required>
+                    <option value="" disabled selected>Select Member</option>
+                    <?php foreach ($employees as $emp):
+                        $fullName = $emp['firstname'] . ' ' . $emp['lastname'];
+                    ?>
+                        <option value="<?= htmlspecialchars($fullName) ?>"><?= htmlspecialchars($fullName) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        <?php } ?>
+    </div>
+    <!-- + button is now OUTSIDE the container -->
+    <button class="btn btn-success btn-sm mt-1 add-member-modal" type="button" data-research-id="<?= $research['id'] ?>">
+        + Add Member
+    </button>
+</div>
                                                                         <div class="mb-3">
                                                                             <label>Start Date:</label>
                                                                             <input type="date" name="startDate" class="form-control"
@@ -212,12 +251,16 @@ foreach ($researchList as $key => $research) {
                                                                                 value="<?= htmlspecialchars($research['endDate']) ?>">
                                                                         </div>
                                                                         <div class="mb-3">
-                                                                            <label>Upload Revised PDF:</label>
-                                                                            <input type="file" name="revised_pdf" class="form-control" accept="application/pdf">
-                                                                            <?php if (!empty($research['revised_pdf'])): ?>
-                                                                                <small>Current revised PDF: <a href="research/<?= htmlspecialchars($research['revised_pdf']) ?>" target="_blank">View</a></small>
-                                                                            <?php endif; ?>
-                                                                        </div>
+    <label>Upload Revised PDF:</label>
+    <input type="file" name="revised_pdf" class="form-control" accept="application/pdf" id="revised_pdf_<?= $research['id'] ?>">
+    <?php if (!empty($research['revised_pdf'])): ?>
+        <small class="text-muted">Current: <a href="research/<?= htmlspecialchars($research['revised_pdf']) ?>" target="_blank">View PDF</a></small>
+        <input type="hidden" name="has_existing_pdf" value="1">
+    <?php else: ?>
+        <small class="text-danger">* PDF file is required</small>
+        <input type="hidden" name="has_existing_pdf" value="0">
+    <?php endif; ?>
+</div>
                                                                     </div>
                                                                     <div class="modal-footer">
                                                                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -238,7 +281,7 @@ foreach ($researchList as $key => $research) {
                 <?php else: ?>
                     <p>No revised research found.</p>
                 <?php endif; ?>
-            </>
+            </main>
             <?php include 'partials/footer.php'; ?>
         </div>
     </div>
@@ -271,6 +314,52 @@ document.addEventListener('click', function(e) {
     if (e.target.classList.contains('remove-member-modal')) {
         e.target.closest('.member-input').remove();
     }
+});
+
+document.addEventListener('click', function(e) {
+    // Add member
+    if (e.target.classList.contains('add-member-modal')) {
+        const researchId = e.target.getAttribute('data-research-id');
+        const container = document.getElementById('member-container-' + researchId);
+        
+        // Clone first select for options
+        const firstSelect = container.querySelector('select');
+        const newSelect = firstSelect.cloneNode(true);
+        newSelect.selectedIndex = 0;
+        
+        // Create remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '-';
+        removeBtn.type = 'button';
+        removeBtn.classList.add('btn', 'btn-danger', 'remove-member-modal');
+        
+        // Create new row
+        const newDiv = document.createElement('div');
+        newDiv.classList.add('input-group', 'mb-2', 'member-input');
+        newDiv.appendChild(newSelect);
+        newDiv.appendChild(removeBtn);
+        
+        container.appendChild(newDiv);
+    }
+    
+    // Remove member
+    if (e.target.classList.contains('remove-member-modal')) {
+        e.target.closest('.member-input').remove();
+    }
+});
+// Validate revised PDF before submit
+document.querySelectorAll('form[action="edit_research_process.php"]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        const hasExisting = form.querySelector('input[name="has_existing_pdf"]').value;
+        const fileInput = form.querySelector('input[name="revised_pdf"]');
+        
+        // If no existing PDF and no new file selected, prevent submit
+        if (hasExisting === '0' && !fileInput.files.length) {
+            e.preventDefault();
+            alert('Please upload a revised PDF file before submitting.');
+            fileInput.focus();
+        }
+    });
 });
 </script>
 </body>

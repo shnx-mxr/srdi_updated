@@ -68,7 +68,7 @@ $type_id = $_SESSION['type_id'] ?? 0;
                 <?php if (in_array($type_id, [1, 2, 3, 4, 6])): ?>
                     <a class="nav-link" href="cancel.php">
                         <div class="sb-nav-link-icon"><i class="fas fa-times-circle text-danger"></i></div>
-                        Cancelled
+                        Disapproved
                     </a>
                 <?php endif; ?>
 
