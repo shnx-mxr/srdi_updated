@@ -9,7 +9,7 @@ class db
 
     public function __construct()
     {
-$this->con = mysqli_connect('localhost', 'root', '', 'srdi', 3306);
+$this->con = mysqli_connect('localhost', 'root', '', 'srdiV2', 3306);
         if (!$this->con) {
             die("Database connection failed: " . mysqli_connect_error());
         }
@@ -266,77 +266,157 @@ if ($result) {
         return $stmt->execute();
     }
 
-    public function getResearchStatusCounts($user_id = null)
-    {
-        if ($user_id !== null) {
-            $query = "SELECT status_id, COUNT(*) AS total FROM research WHERE user_id = ? GROUP BY status_id";
-            $stmt = $this->con->prepare($query);
-            $stmt->bind_param("i", $user_id);
-        } else {
-            $query = "SELECT status_id, COUNT(*) AS total FROM research GROUP BY status_id";
-            $stmt = $this->con->prepare($query);
-        }
+  public function getResearchStatusCounts($user_id = null, $type_id = null, $branch = null)
+{
+    $statusMap = [1 => 'pending', 2 => 'approved', 3 => 'revised', 4 => 'cancelled', 5 => 'published'];
+    $counts = array_fill_keys(array_values($statusMap), 0);
 
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        $statusMap = [1 => 'pending', 2 => 'approved', 3 => 'revised', 4 => 'cancelled', 5 => 'published'];
-        $counts = array_fill_keys(array_values($statusMap), 0);
-
-        while ($row = $result->fetch_assoc()) {
-            $id = (int)$row['status_id'];
-            if (isset($statusMap[$id])) $counts[$statusMap[$id]] = (int)$row['total'];
-        }
-
-        $stmt->close();
-        return $counts;
-    }
-
-    public function getMonthlyResearchCounts($year, $user_id = null)
-    {
-        if ($user_id !== null) {
-            $query = "SELECT MONTH(created_at) AS month, COUNT(*) AS total FROM research WHERE YEAR(created_at)=? AND user_id=? GROUP BY MONTH(created_at)";
-            $stmt = $this->con->prepare($query);
-            $stmt->bind_param("ii", $year, $user_id);
-        } else {
-            $query = "SELECT MONTH(created_at) AS month, COUNT(*) AS total FROM research WHERE YEAR(created_at)=? GROUP BY MONTH(created_at)";
-            $stmt = $this->con->prepare($query);
-            $stmt->bind_param("i", $year);
-        }
-
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        $data = [];
-        while ($row = $result->fetch_assoc()) {
-            $data[(int)$row['month']] = (int)$row['total'];
-        }
-
-        $stmt->close();
-        return $data;
-    }
-
-    public function getAllResearch($user_id = null)
-    {
-        $query = "SELECT r.*, e.firstname AS leader_firstname, e.lastname AS leader_lastname
-              FROM research r
-              LEFT JOIN employee e ON r.user_id = e.id";
-
-        if ($user_id !== null) $query .= " WHERE r.user_id=?";
-        $query .= " ORDER BY r.created_at DESC";
-
+    // Build query based on role
+    if ($user_id !== null && $type_id == 1) {
+        // Researcher: only their own
+        $query = "SELECT status_id, COUNT(*) AS total FROM research WHERE user_id = ? GROUP BY status_id";
         $stmt = $this->con->prepare($query);
-        if ($user_id !== null) $stmt->bind_param("i", $user_id);
+        $stmt->bind_param("i", $user_id);
 
-        $stmt->execute();
-        $result = $stmt->get_result();
+    } elseif ($type_id == 2 && $branch) {
+        // Section Head: only their branch
+        $branchTypeId = $this->branchToTypeId($branch);
+        $query = "SELECT status_id, COUNT(*) AS total FROM research WHERE type_id = ? GROUP BY status_id";
+        $stmt = $this->con->prepare($query);
+        $stmt->bind_param("i", $branchTypeId);
 
-        $data = [];
-        while ($row = $result->fetch_assoc()) $data[] = $row;
+    } elseif ($type_id == 5) {
+        // Records: only sent_to_records = 1
+        $query = "SELECT status_id, COUNT(*) AS total FROM research WHERE sent_to_records = 1 GROUP BY status_id";
+        $stmt = $this->con->prepare($query);
 
-        $stmt->close();
-        return $data;
+    } elseif ($type_id == 6) {
+        // Exec Dir: only processed_by_records = 1
+        $query = "SELECT status_id, COUNT(*) AS total FROM research WHERE processed_by_records = 1 GROUP BY status_id";
+        $stmt = $this->con->prepare($query);
+
+    } else {
+        // Div Chief, Admin: see everything
+        $query = "SELECT status_id, COUNT(*) AS total FROM research GROUP BY status_id";
+        $stmt = $this->con->prepare($query);
     }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($row = $result->fetch_assoc()) {
+        $id = (int)$row['status_id'];
+        if (isset($statusMap[$id])) $counts[$statusMap[$id]] = (int)$row['total'];
+    }
+
+    $stmt->close();
+    return $counts;
+}
+   public function getMonthlyResearchCounts($year, $user_id = null, $type_id = null, $branch = null)
+{
+    if ($user_id !== null && $type_id == 1) {
+        // Researcher: only their own
+        $query = "SELECT MONTH(created_at) AS month, COUNT(*) AS total 
+                  FROM research 
+                  WHERE YEAR(created_at) = ? AND user_id = ? 
+                  GROUP BY MONTH(created_at)";
+        $stmt = $this->con->prepare($query);
+        $stmt->bind_param("ii", $year, $user_id);
+
+    } elseif ($type_id == 2 && $branch) {
+        // Section Head: only their branch
+        $branchTypeId = $this->branchToTypeId($branch);
+        $query = "SELECT MONTH(created_at) AS month, COUNT(*) AS total 
+                  FROM research 
+                  WHERE YEAR(created_at) = ? AND type_id = ? 
+                  GROUP BY MONTH(created_at)";
+        $stmt = $this->con->prepare($query);
+        $stmt->bind_param("ii", $year, $branchTypeId);
+
+    } elseif ($type_id == 5) {
+        // Records: only sent_to_records = 1
+        $query = "SELECT MONTH(created_at) AS month, COUNT(*) AS total 
+                  FROM research 
+                  WHERE YEAR(created_at) = ? AND sent_to_records = 1 
+                  GROUP BY MONTH(created_at)";
+        $stmt = $this->con->prepare($query);
+        $stmt->bind_param("i", $year);
+
+    } elseif ($type_id == 6) {
+        // Exec Dir: only processed_by_records = 1
+        $query = "SELECT MONTH(created_at) AS month, COUNT(*) AS total 
+                  FROM research 
+                  WHERE YEAR(created_at) = ? AND processed_by_records = 1 
+                  GROUP BY MONTH(created_at)";
+        $stmt = $this->con->prepare($query);
+        $stmt->bind_param("i", $year);
+
+    } else {
+        // Div Chief, Admin: see everything
+        $query = "SELECT MONTH(created_at) AS month, COUNT(*) AS total 
+                  FROM research 
+                  WHERE YEAR(created_at) = ? 
+                  GROUP BY MONTH(created_at)";
+        $stmt = $this->con->prepare($query);
+        $stmt->bind_param("i", $year);
+    }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $data = [];
+    while ($row = $result->fetch_assoc()) {
+        $data[(int)$row['month']] = (int)$row['total'];
+    }
+
+    $stmt->close();
+    return $data;
+}
+
+ public function getAllResearch($user_id = null, $type_id = null, $branch = null)
+{
+    $base = "SELECT r.*, e.firstname AS leader_firstname, e.lastname AS leader_lastname
+             FROM research r
+             LEFT JOIN employee e ON r.user_id = e.id";
+
+    if ($user_id !== null && $type_id == 1) {
+        // Researcher: only their own
+        $query = $base . " WHERE r.user_id = ? ORDER BY r.created_at DESC";
+        $stmt = $this->con->prepare($query);
+        $stmt->bind_param("i", $user_id);
+
+    } elseif ($type_id == 2 && $branch) {
+        // Section Head: only their branch
+        $branchTypeId = $this->branchToTypeId($branch);
+        $query = $base . " WHERE r.type_id = ? ORDER BY r.created_at DESC";
+        $stmt = $this->con->prepare($query);
+        $stmt->bind_param("i", $branchTypeId);
+
+    } elseif ($type_id == 5) {
+        // Records: only sent_to_records = 1
+        $query = $base . " WHERE r.sent_to_records = 1 ORDER BY r.created_at DESC";
+        $stmt = $this->con->prepare($query);
+
+    } elseif ($type_id == 6) {
+        // Exec Dir: only processed_by_records = 1
+        $query = $base . " WHERE r.processed_by_records = 1 ORDER BY r.created_at DESC";
+        $stmt = $this->con->prepare($query);
+
+    } else {
+        // Div Chief, Admin: see everything
+        $query = $base . " ORDER BY r.created_at DESC";
+        $stmt = $this->con->prepare($query);
+    }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $data = [];
+    while ($row = $result->fetch_assoc()) $data[] = $row;
+
+    $stmt->close();
+    return $data;
+}
 
 
     // if  something happened, just remove the comment
@@ -399,18 +479,34 @@ if ($result) {
 
 
 
+    // public function getEmployees()
+    // {
+    //     $sql = "SELECT firstname, lastname FROM employee ORDER BY firstname ASC, lastname ASC";
+    //     $result = $this->con->query($sql);
+    //     $employees = [];
+    //     if ($result) {
+    //         while ($row = $result->fetch_assoc()) {
+    //             $employees[] = $row;
+    //         }
+    //     }
+    //     return $employees;
+    // }
+
+
+
+
     public function getEmployees()
-    {
-        $sql = "SELECT firstname, lastname FROM employee ORDER BY firstname ASC, lastname ASC";
-        $result = $this->con->query($sql);
-        $employees = [];
-        if ($result) {
-            while ($row = $result->fetch_assoc()) {
-                $employees[] = $row;
-            }
+{
+    $sql = "SELECT id, firstname, lastname FROM employee ORDER BY firstname ASC, lastname ASC";
+    $result = $this->con->query($sql);
+    $employees = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $employees[] = $row;
         }
-        return $employees;
     }
+    return $employees;
+}
 // Convert research type_id to branch name
 // Convert research type_id to branch name
 public function typeIdToBranch($type_id)
@@ -1532,4 +1628,489 @@ private function branchToTypeId($branch)
     ];
     return $mapping[$branch] ?? null;
 }
+
+// ========================================
+// PROGRAM/PROJECT/STUDY FUNCTIONS
+// ========================================
+
+public function uploadProgram($data, $files) {
+    $this->con->begin_transaction();
+    
+    try {
+        // Use first project's title/leader as program title/leader
+        $first_project = $data['projects'][0] ?? null;
+        if (!$first_project) {
+            throw new Exception("No projects found");
+        }
+        
+        // 1. Insert Program (using first project's details)
+        $stmt = $this->con->prepare("
+            INSERT INTO research_programs 
+            (program_title, program_leader_id, sustainable_goals, hnrda_area, hnrda_sector, focus_rdi_agenda, status_id, created_by) 
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+        ");
+        
+        $sdg_json = json_encode($data['sdg']);
+        $focus_rdi_json = json_encode($data['focus_rdi']);
+        
+        $stmt->bind_param(
+            "sissssi",
+            $first_project['title'],        // Use first project's title
+            $first_project['leader'],       // Use first project's leader
+            $sdg_json,
+            $data['hnrda_area'],
+            $data['hnrda_sector'],
+            $focus_rdi_json,
+            $data['created_by']
+        );
+        $stmt->execute();
+        $program_id = $this->con->insert_id;
+        $stmt->close();
+        
+        // 2. Insert Projects and Studies
+        foreach ($data['projects'] as $project) {
+            // Insert project
+            $project_id = $this->insertProject($program_id, $project);
+            
+            // Insert Studies for this project
+            foreach ($project['studies'] as $study) {
+                // Save study attachment
+                $attachment_path = null;
+                if (isset($study['attachment']) && $study['attachment']['error'] === 0) {
+                    $attachment_path = $this->saveStudyAttachment($study['attachment']);
+                }
+                
+                // Join members
+                $members = is_array($study['members']) ? implode(", ", $study['members']) : '';
+                
+                // Insert study
+                $stmt = $this->con->prepare("
+                    INSERT INTO research_studies 
+                    (project_id, study_title, study_leader_id, section, study_members, funding_source, start_date, end_date, description, attachment_path) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                
+                $stmt->bind_param(
+                    "isisssssss",
+                    $project_id,
+                    $study['title'],
+                    $study['leader'],
+                    $study['section'],
+                    $members,
+                    $study['funding'],
+                    $study['start_date'],
+                    $study['end_date'],
+                    $study['description'],
+                    $attachment_path
+                );
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+        
+        // 3. Save program-level attachments
+        $this->saveProgramAttachments($program_id, $files);
+        
+        // 4. Get type_id from first study's section
+        $type_id_map = [
+            'Mulberry' => 1,
+            'Post Cocoon' => 2,
+            'Silkworm' => 3
+        ];
+        $first_section = $data['projects'][0]['studies'][0]['section'] ?? 'Mulberry';
+        $type_id = $type_id_map[$first_section] ?? 1;
+        
+        // 5. Create main research entry (use first project's title)
+        $stmt = $this->con->prepare("
+            INSERT INTO research 
+            (program_id, title, user_id, type_id, research_type, status_id, created_at) 
+            VALUES (?, ?, ?, ?, 'program', 1, NOW())
+        ");
+        $stmt->bind_param("isii", $program_id, $first_project['title'], $data['created_by'], $type_id);
+        $stmt->execute();
+        $research_id = $this->con->insert_id;
+        $stmt->close();
+        
+        // 6. Send notifications
+        $this->notifyProgramUpload($research_id, $first_project['title'], $data['created_by']);
+        
+        $this->con->commit();
+        return true;
+        
+    } catch (Exception $e) {
+        $this->con->rollback();
+        error_log("Program upload error: " . $e->getMessage());
+        return false;
+    }
+}
+private function insertProject($program_id, $project) {
+    $stmt = $this->con->prepare("
+        INSERT INTO research_projects (program_id, project_title, project_leader_id) 
+        VALUES (?, ?, ?)
+    ");
+    $stmt->bind_param("isi", $program_id, $project['title'], $project['leader']);
+    $stmt->execute();
+    $project_id = $this->con->insert_id;
+    $stmt->close();
+    return $project_id;
+}
+
+private function insertStudy($project_id, $study, $files) {
+    // Save attachment file
+    $attachment_path = null;
+    if (isset($files['attachment']) && $files['attachment']['error'] === 0) {
+        $attachment_path = $this->saveStudyAttachment($files['attachment']);
+    }
+    
+    // Join members
+    $members = implode(", ", $study['members']);
+    
+    $stmt = $this->con->prepare("
+        INSERT INTO research_studies 
+        (project_id, study_title, study_leader_id, section, study_members, funding_source, start_date, end_date, description, attachment_path) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->bind_param(
+        "isisssssss",
+        $project_id,
+        $study['title'],
+        $study['leader'],
+        $study['section'],
+        $members,
+        $study['funding'],
+        $study['start_date'],
+        $study['end_date'],
+        $study['description'],
+        $attachment_path
+    );
+    $stmt->execute();
+    $stmt->close();
+}
+
+private function saveStudyAttachment($file) {
+    $targetDir = __DIR__ . "/../view/employee/study_attachments/";
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0777, true);
+    }
+    
+    $filename = time() . '_' . basename($file['name']);
+    $targetFile = $targetDir . $filename;
+    
+    if (move_uploaded_file($file['tmp_name'], $targetFile)) {
+        return $filename;
+    }
+    return null;
+}
+
+private function saveProgramAttachments($program_id, $files) {
+    $targetDir = __DIR__ . "/../view/employee/program_attachments/";
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0777, true);
+    }
+    
+    $file_types = [
+        'proposal_form',
+        'cv',
+        'data_gathering',
+        'compliance_matrix',
+        'ethics_request',
+        'ethics_application',
+        'informed_consent'
+    ];
+    
+    foreach ($file_types as $type) {
+        if (isset($files[$type]) && $files[$type]['error'] === 0) {
+            $filename = time() . '_' . $type . '_' . basename($files[$type]['name']);
+            $targetFile = $targetDir . $filename;
+            
+            if (move_uploaded_file($files[$type]['tmp_name'], $targetFile)) {
+                $stmt = $this->con->prepare("
+                    INSERT INTO program_attachments (program_id, file_type, file_path) 
+                    VALUES (?, ?, ?)
+                ");
+                $stmt->bind_param("iss", $program_id, $type, $filename);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+    }
+}
+
+private function notifyProgramUpload($research_id, $title, $user_id) {
+    $uploaderName = $this->getEmployeeName($user_id);
+    
+    // Notify Section Heads
+    $result = $this->con->query("SELECT id FROM employee WHERE type_id = 2");
+    if ($result) {
+        while ($secHead = $result->fetch_assoc()) {
+            $message = "New research program uploaded by {$uploaderName}: {$title}";
+            $this->insertNotification($secHead['id'], $message, $research_id, 'pending');
+        }
+    }
+    
+    // Notify Admin
+    $result = $this->con->query("SELECT id FROM employee WHERE type_id = 4");
+    if ($result) {
+        while ($admin = $result->fetch_assoc()) {
+            $message = "New research program uploaded by {$uploaderName}: {$title}";
+            $this->insertNotification($admin['id'], $message, $research_id, 'pending');
+        }
+    }
+}
+public function getProgramDetails($program_id) {
+    $program_id = (int)$program_id;
+    
+    // Get program
+    $stmt = $this->con->prepare("SELECT * FROM research_programs WHERE id = ?");
+    $stmt->bind_param("i", $program_id);
+    $stmt->execute();
+    $program = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    
+    if (!$program) return null;
+    
+    // Get projects
+    $stmt = $this->con->prepare("SELECT * FROM research_projects WHERE program_id = ?");
+    $stmt->bind_param("i", $program_id);
+    $stmt->execute();
+    $projects = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    
+    // Get studies for each project
+    foreach ($projects as $key => $project) {
+        $stmt = $this->con->prepare("SELECT * FROM research_studies WHERE project_id = ?");
+        $stmt->bind_param("i", $project['id']);
+        $stmt->execute();
+        $projects[$key]['studies'] = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    }
+    
+    $program['projects'] = $projects;
+    
+    // Get attachments
+    $stmt = $this->con->prepare("SELECT * FROM program_attachments WHERE program_id = ?");
+    $stmt->bind_param("i", $program_id);
+    $stmt->execute();
+    $program['attachments'] = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    
+    return $program;
+}
+
+public function getResearchWithProgram($research_id) {
+    $research_id = (int)$research_id;
+    
+    $stmt = $this->con->prepare("SELECT * FROM research WHERE id = ?");
+    $stmt->bind_param("i", $research_id);
+    $stmt->execute();
+    $research = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    
+    if (!$research) return null;
+    
+    // If it's a program, get program details
+    if ($research['research_type'] === 'program' && $research['program_id']) {
+        $research['program_details'] = $this->getProgramDetails($research['program_id']);
+    }
+    
+    return $research;
+}
+public function uploadProject($data, $files) {
+    $this->con->begin_transaction();
+    
+    try {
+        // 1. Create program entry with SDGs, HNRDA, Focus RDI
+        $stmt = $this->con->prepare("
+            INSERT INTO research_programs 
+            (program_title, program_leader_id, sustainable_goals, hnrda_area, hnrda_sector, focus_rdi_agenda, status_id, created_by) 
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+        ");
+        
+        $sdg_json = json_encode($data['sdg']);
+        $focus_json = json_encode($data['focus_rdi']);
+        
+        $stmt->bind_param(
+            "sissssi", 
+            $data['project_title'], 
+            $data['project_leader'], 
+            $sdg_json, 
+            $data['hnrda_area'], 
+            $data['hnrda_sector'], 
+            $focus_json, 
+            $data['created_by']
+        );
+        $stmt->execute();
+        $program_id = $this->con->insert_id;
+        $stmt->close();
+        
+        // 2. Insert the project
+        $project_id = $this->insertProject($program_id, [
+            'title' => $data['project_title'],
+            'leader' => $data['project_leader']
+        ]);
+        
+        // 3. Insert studies
+        foreach ($data['studies'] as $study) {
+            // Save study attachment
+            $attachment_path = null;
+            if (isset($study['attachment']) && $study['attachment']['error'] === 0) {
+                $attachment_path = $this->saveStudyAttachment($study['attachment']);
+            }
+            
+            // Join members
+            $members = is_array($study['members']) ? implode(", ", $study['members']) : '';
+            
+            // Insert study
+            $stmt = $this->con->prepare("
+                INSERT INTO research_studies 
+                (project_id, study_title, study_leader_id, section, study_members, funding_source, start_date, end_date, description, attachment_path) 
+                VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+            ");
+            
+            $stmt->bind_param(
+                "isisssss",
+                $project_id,
+                $study['title'],
+                $study['leader'],
+                $study['section'],
+                $members,
+                $study['funding'],
+                $study['proposed_budget'],
+                $attachment_path
+            );
+            $stmt->execute();
+            $stmt->close();
+        }
+        
+        // 4. Save attachments (proposal_form, cv, etc.)
+        $this->saveProgramAttachments($program_id, $files);
+        
+        // 5. Get type_id from first study's section
+        $type_id_map = [
+            'Mulberry' => 1,
+            'Post Cocoon' => 2,
+            'Silkworm' => 3
+        ];
+        $first_section = $data['studies'][0]['section'] ?? 'Mulberry';
+        $type_id = $type_id_map[$first_section] ?? 1;
+        
+        // 6. Create research entry
+        $stmt = $this->con->prepare("
+            INSERT INTO research 
+            (program_id, title, user_id, type_id, research_type, status_id, created_at) 
+            VALUES (?, ?, ?, ?, 'project', 1, NOW())
+        ");
+        $stmt->bind_param("isii", $program_id, $data['project_title'], $data['created_by'], $type_id);
+        $stmt->execute();
+        $research_id = $this->con->insert_id;
+        $stmt->close();
+        
+        // 7. Notify
+        $this->notifyProgramUpload($research_id, $data['project_title'], $data['created_by']);
+        
+        $this->con->commit();
+        return true;
+    } catch (Exception $e) {
+        $this->con->rollback();
+        error_log("Project upload error: " . $e->getMessage());
+        return false;
+    }
+}
+public function uploadStudy($data, $files) {
+    $this->con->begin_transaction();
+    
+    try {
+        // Save study attachment
+        $attachment_path = null;
+        if (isset($files['attachment'])) {
+            $attachment_path = $this->saveStudyAttachment($files['attachment']);
+        }
+        
+        // Join members
+        $members = implode(", ", $data['members']);
+        
+        // Create program entry (container for single study)
+        $stmt = $this->con->prepare("
+            INSERT INTO research_programs 
+            (program_title, program_leader_id, sustainable_goals, hnrda_area, hnrda_sector, focus_rdi_agenda, status_id, created_by) 
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+        ");
+        
+        $sdg_json = json_encode($data['sdg']);
+        $focus_json = json_encode($data['focus_rdi']);
+        
+        // FIX LINE 1949: This should have 7 parameters for research_programs table
+        $stmt->bind_param(
+            "sissssi",  // 7 types: string, int, string, string, string, string, int
+            $data['study_title'],      // program_title
+            $data['study_leader'],     // program_leader_id
+            $sdg_json,                 // sustainable_goals
+            $data['hnrda_area'],       // hnrda_area
+            $data['hnrda_sector'],     // hnrda_sector
+            $focus_json,               // focus_rdi_agenda
+            $data['created_by']        // created_by
+        );
+        $stmt->execute();
+        $program_id = $this->con->insert_id;
+        $stmt->close();
+        
+        // Create project
+        $project_id = $this->insertProject($program_id, ['title' => $data['study_title'], 'leader' => $data['study_leader']]);
+        
+        // Create study - THIS has 8 parameters
+        $stmt = $this->con->prepare("
+            INSERT INTO research_studies 
+            (project_id, study_title, study_leader_id, section, study_members, funding_source, start_date, end_date, description, attachment_path) 
+            VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+        ");
+        
+        // 8 parameters for research_studies table
+        $stmt->bind_param(
+            "isisssss",  // 8 types: int, string, int, string, string, string, string, string
+            $project_id,               // project_id
+            $data['study_title'],      // study_title
+            $data['study_leader'],     // study_leader_id
+            $data['section'],          // section
+            $members,                  // study_members
+            $data['funding'],          // funding_source
+            $data['proposed_budget'],  // description
+            $attachment_path           // attachment_path
+        );
+        $stmt->execute();
+        $stmt->close();
+        
+        // Save attachments
+        $this->saveProgramAttachments($program_id, $files);
+        
+        // Get type_id from section (branch)
+        $type_id_map = [
+            'Mulberry' => 1,
+            'Post Cocoon' => 2,
+            'Silkworm' => 3
+        ];
+        $type_id = $type_id_map[$data['section']] ?? 1;
+        
+        // Create research entry
+        $stmt = $this->con->prepare("
+            INSERT INTO research 
+            (program_id, title, user_id, type_id, research_type, status_id, created_at) 
+            VALUES (?, ?, ?, ?, 'study', 1, NOW())
+        ");
+        $stmt->bind_param("isii", $program_id, $data['study_title'], $data['created_by'], $type_id);
+        $stmt->execute();
+        $research_id = $this->con->insert_id;
+        $stmt->close();
+        
+        // Notify
+        $this->notifyProgramUpload($research_id, $data['study_title'], $data['created_by']);
+        
+        $this->con->commit();
+        return true;
+    } catch (Exception $e) {
+        $this->con->rollback();
+        error_log("Study upload error: " . $e->getMessage());
+        return false;
+    }
+}
+
 }

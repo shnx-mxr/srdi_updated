@@ -46,10 +46,15 @@ foreach ($researchList as $key => $research) {
         <?php include 'partials/sidebar.php'; ?>
         <div id="layoutSidenav_content">
             <main class="container-fluid px-4">
-                <h1 class="mt-4">Published Research</h1>
+            <div class="d-flex align-items-center justify-content-between my-4">
+    <h1 class="fw-semibold mb-0">Published Research</h1>
+    <span class="text-muted small">Research that has been officially published</span>
+</div>
+<hr class="mt-2 mb-4">
+
 
                 <!-- Type Filter -->
-                <form method="GET" class="mb-3">
+                <!-- <form method="GET" class="mb-3">
                     <label>Filter by Type:</label>
                     <select name="type_id" class="form-select w-auto d-inline-block">
                         <option value="">All</option>
@@ -58,12 +63,12 @@ foreach ($researchList as $key => $research) {
                         <?php endforeach; ?>
                     </select>
                     <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                </form>
+                </form> -->
 
                 <?php if ($researchList): ?>
                     <div class="card mb-4">
                         <div class="card-header"><i class="fas fa-list"></i> Published Research</div>
-                        <div class="card-body">
+                   <div class="card-body table-responsive">
                             <table class="table table-bordered table-striped">
                                 <thead>
                                     <tr>
@@ -114,7 +119,7 @@ foreach ($researchList as $key => $research) {
                                                             <i class="fas fa-plus"></i> Add Publication
                                                         </button>
                                                     <?php else: ?>
-                                                        <span class="text-muted">Not yet published</span>
+                                                        <span class="text-muted">No publication link yet</span>
                                                     <?php endif; ?>
                                                 <?php else: ?>
                                                     <!-- View Publication Link (everyone can see) -->

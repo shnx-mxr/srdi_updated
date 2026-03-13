@@ -81,10 +81,16 @@ foreach ($researchList as $key => $research) {
         <?php include 'partials/sidebar.php'; ?>
         <div id="layoutSidenav_content">
             <main class="container-fluid px-4">
-                <h1 class="mt-4">Revision Research</h1>
+   <div class="d-flex align-items-center justify-content-between my-4">
+    <h1 class="fw-semibold mb-0">Revision Research</h1>
+    
+    <span class="text-muted small">Research returned for revision and compliance</span>
+</div>
+<hr class="mt-2 mb-4">
+
 
                 <!-- Type Filter -->
-                <form method="GET" class="mb-3">
+                <!-- <form method="GET" class="mb-3">
                     <label>Filter by Type:</label>
                     <select name="type_id" class="form-select w-auto d-inline-block">
                         <option value="">All</option>
@@ -93,12 +99,12 @@ foreach ($researchList as $key => $research) {
                         <?php endforeach; ?>
                     </select>
                     <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                </form>
+                </form> -->
 
                 <?php if ($researchList): ?>
                     <div class="card mb-4">
                         <div class="card-header"><i class="fas fa-list"></i> Revised Research</div>
-                        <div class="card-body">
+                     <div class="card-body table-responsive">
                             <table class="table table-bordered table-striped">
                                 <thead>
                                     <tr>
@@ -116,165 +122,333 @@ foreach ($researchList as $key => $research) {
                                         <?php if ($type_id == 1): ?><th>Action</th><?php endif; ?>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <?php foreach ($researchList as $research): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($research['title']) ?></td>
-                                            <td><?= htmlspecialchars($research['team_leader']) ?></td>
-                                            <td><?= htmlspecialchars($research['member']) ?></td>
-                                            <td><?= htmlspecialchars($research['startDate']) ?></td>
-                                            <td><?= htmlspecialchars($research['endDate']) ?></td>
-                                            <td>
-                                                <?php if (!empty($research['filePath'])): ?>
-                                                    <a href="research/<?= htmlspecialchars($research['filePath']) ?>" target="_blank">Original PDF</a>
-                                                <?php else: ?> N/A <?php endif; ?>
+                          <tbody>
+    <?php foreach ($researchList as $research): ?>
+        <?php if ($research['research_type'] === 'program' && $research['program_id']): ?>
+            <!-- PROGRAM ROW -->
+            <?php 
+            $programDetails = $db->getProgramDetails($research['program_id']);
+            $projectCount = count($programDetails['projects'] ?? []);
+            $studyCount = 0;
+            foreach ($programDetails['projects'] ?? [] as $proj) {
+                $studyCount += count($proj['studies'] ?? []);
+            }
+            ?>
+            <tr class="table-primary">
+                <td>
+                    <strong><i class="fas fa-folder-open"></i> PROGRAM:</strong> 
+                    <?= htmlspecialchars($research['title']) ?>
+                    <br>
+                    <small class="text-muted">
+                        <?= $projectCount ?> Project(s), <?= $studyCount ?> Study(ies)
+                    </small>
+                </td>
+                <td><?= htmlspecialchars($research['team_leader']) ?></td>
+                <td colspan="3">
+                    <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#programModal<?= $research['id'] ?>">
+                        <i class="fas fa-eye"></i> View Details
+                    </button>
+                </td>
+                <td>-</td>
+                <td><span class="badge bg-warning">Pending</span></td>
+                <td><?= htmlspecialchars($research['decided_by']) ?></td>
+                <td>Multiple</td>
+                <?php if ($type_id == 2): ?>
+                    <td>
+                        <form method="POST" class="d-inline mb-1">
+                            <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                            <button type="submit" name="update_status" value="2" class="btn btn-success btn-sm">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                        </form><br>
+                        
+                        <button type="button" class="btn btn-warning btn-sm mb-1" data-bs-toggle="modal" data-bs-target="#reviseModal<?= $research['id'] ?>">
+                            <i class="fas fa-edit"></i> Revise
+                        </button><br>
+                        
+                        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#cancelModal<?= $research['id'] ?>">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
 
-                                                <?php if (!empty($research['revised_pdf'])): ?>
-                                                    <br><a href="research/<?= htmlspecialchars($research['revised_pdf']) ?>" target="_blank">Revised PDF</a>
-                                                <?php endif; ?>
-                                            </td>
-
-                                            <td>
-                                                <?php if (!empty($research['compliance'])): ?>
-                                                    <a href="compliance/<?= htmlspecialchars($research['compliance']) ?>" target="_blank">View Compliance</a>
-                                                <?php else: ?> N/A <?php endif; ?>
-                                            </td>
-                                            <td><?= htmlspecialchars($research['comment'] ?? '-') ?></td>
-
-                                            <!-- Status Column -->
-                                            <td>
-                                                <?php
-                                                // Check if rejected by Exec Dir
-                                                if (isset($research['rejected_by_exec']) && $research['rejected_by_exec'] == 1) {
-                                                    echo '<span class="badge bg-danger">Rejected by Exec Dir</span>';
-                                                    if (!empty($research['exec_reject_comment'])) {
-                                                        echo '<br><small class="text-muted mt-1 d-block">Reason: ' . htmlspecialchars($research['exec_reject_comment']) . '</small>';
-                                                    }
-                                                } else {
-                                                    // Show who revised it
-                                                    $decidedByRole = $research['decided_by_role'] ?? 0;
-                                                    $revisedBy = match($decidedByRole) {
-                                                        2 => 'Section Head',
-                                                        3 => 'Division Chief',
-                                                        6 => 'Exec Director',
-                                                        default => 'Unknown'
-                                                    };
-                                                    echo '<span class="badge bg-warning">Revision</span>';
-                                                    echo '<br><small class="text-muted">By: ' . $revisedBy . '</small>';
-                                                }
-                                                ?>
-                                            </td>
-
-                                            <td><?= htmlspecialchars($research['decided_by']) ?></td>
-                                            <td><?= htmlspecialchars($research['type_name']) ?></td>
-                                            
-                                            <?php if ($type_id == 1): ?>
-                                                <!-- Researcher can edit and resubmit -->
-                                                <td>
-                                                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal"
-                                                        data-bs-target="#editModal<?= $research['id'] ?>">
-                                                        <i class="fas fa-edit"></i> Edit & Resubmit
-                                                    </button>
-
-                                                    <!-- Edit Modal -->
-                                                    <div class="modal fade" id="editModal<?= $research['id'] ?>" tabindex="-1">
-                                                        <div class="modal-dialog">
-                                                            <form method="POST" action="edit_research_process.php" enctype="multipart/form-data">
-                                                                <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
-                                                                <div class="modal-content">
-                                                                    <div class="modal-header">
-                                                                        <h5 class="modal-title">Edit & Resubmit Research</h5>
-                                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                                                    </div>
-                                                                    <div class="modal-body">
-                                                                        <div class="alert alert-info">
-                                                                            <strong>Note:</strong> After you submit, this research will go back to <strong>Section Head</strong> for re-approval.
-                                                                        </div>
-                                                                        
-                                                                        <div class="mb-3">
-                                                                            <label>Title:</label>
-                                                                            <input type="text" name="title" class="form-control"
-                                                                                value="<?= htmlspecialchars($research['title']) ?>" required>
-                                                                        </div>
-                                                                    <div class="mb-3">
-    <label>Members:</label>
-    <div id="member-container-<?= $research['id'] ?>">
-        <?php 
-        $currentMembers = !empty($research['member']) ? explode(", ", $research['member']) : [];
-        $employees = $db->getEmployees();
-        
-        if (!empty($currentMembers)) {
-            foreach ($currentMembers as $index => $currentMember) {
-                $isFirst = $index === 0;
-        ?>
-            <div class="input-group mb-2 member-input">
-                <select name="members[]" class="form-select" required>
-                    <option value="" disabled>Select Member</option>
-                    <?php foreach ($employees as $emp):
-                        $fullName = $emp['firstname'] . ' ' . $emp['lastname'];
-                        $selected = trim($fullName) === trim($currentMember) ? 'selected' : '';
-                    ?>
-                        <option value="<?= htmlspecialchars($fullName) ?>" <?= $selected ?>><?= htmlspecialchars($fullName) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <?php if (!$isFirst): ?>
-                    <button class="btn btn-danger remove-member-modal" type="button">-</button>
+                        <!-- Revise Modal (same as before) -->
+                        <div class="modal fade" id="reviseModal<?= $research['id'] ?>" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="POST" enctype="multipart/form-data" class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Revise Research</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                                        <input type="hidden" name="update_status" value="3">
+                                        <div class="mb-3">
+                                            <label>Comment (Required)</label>
+                                            <textarea class="form-control" name="comment" rows="3" required></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label>Upload Compliance PDF (Required)</label>
+                                            <input type="file" class="form-control" name="compliance" accept="application/pdf" required>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                        <button type="submit" class="btn btn-warning">Submit Revision</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        
+                        <!-- Cancel Modal (same as before) -->
+                        <div class="modal fade" id="cancelModal<?= $research['id'] ?>" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="POST" class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Cancel Research</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                                        <input type="hidden" name="cancel_research" value="1">
+                                        <div class="mb-3">
+                                            <label>Reason for Cancellation (Required)</label>
+                                            <textarea class="form-control" name="cancel_comment" rows="3" required placeholder="Explain why this research is being cancelled..."></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                        <button type="submit" class="btn btn-danger">Cancel Research</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </td>
                 <?php endif; ?>
+            </tr>
+            
+            <!-- Program Details Modal -->
+            <div class="modal fade" id="programModal<?= $research['id'] ?>" tabindex="-1">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title">
+                                <i class="fas fa-folder-open"></i> Program Details
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <h4><?= htmlspecialchars($research['title']) ?></h4>
+                            <hr>
+                            
+                            <?php if (!empty($programDetails['sustainable_goals'])): ?>
+                            <h5>SDGs Selected:</h5>
+                            <p><?= implode(', ', json_decode($programDetails['sustainable_goals'], true)) ?></p>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($programDetails['hnrda_area'])): ?>
+                            <h5>HNRDA Area:</h5>
+                            <p><?= htmlspecialchars($programDetails['hnrda_area']) ?></p>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($programDetails['hnrda_sector'])): ?>
+                            <h5>HNRDA Sector:</h5>
+                            <p><?= htmlspecialchars($programDetails['hnrda_sector']) ?></p>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($programDetails['focus_rdi_agenda'])): ?>
+                            <h5>Focus RDI Agenda:</h5>
+                            <p><?= implode(', ', json_decode($programDetails['focus_rdi_agenda'], true)) ?></p>
+                            <?php endif; ?>
+                            
+                            <hr>
+                            
+                            <h5>Projects & Studies:</h5>
+                            <?php foreach ($programDetails['projects'] ?? [] as $project): ?>
+                                <div class="card mb-3">
+                                    <div class="card-header bg-info text-white">
+                                        <strong>Project:</strong> <?= htmlspecialchars($project['project_title']) ?>
+                                    </div>
+                                    <div class="card-body">
+                                        <?php foreach ($project['studies'] ?? [] as $study): ?>
+                                            <div class="mb-3 p-3 border">
+                                                <h6><strong>Study:</strong> <?= htmlspecialchars($study['study_title']) ?></h6>
+                                                <p><strong>Section:</strong> <?= htmlspecialchars($study['section']) ?></p>
+                                                <p><strong>Members:</strong> <?= htmlspecialchars($study['study_members']) ?></p>
+                                                <p><strong>Duration:</strong> <?= $study['start_date'] ?> to <?= $study['end_date'] ?></p>
+                                                <p><strong>Description:</strong> <?= htmlspecialchars($study['description']) ?></p>
+                                                <?php if ($study['attachment_path']): ?>
+                                                    <a href="study_attachments/<?= $study['attachment_path'] ?>" target="_blank" class="btn btn-sm btn-primary">
+                                                        <i class="fas fa-file-pdf"></i> View Study PDF
+                                                    </a>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                            
+                            <hr>
+                            
+                            <h5>Program Attachments:</h5>
+                            <?php foreach ($programDetails['attachments'] ?? [] as $attachment): ?>
+                                <a href="program_attachments/<?= $attachment['file_path'] ?>" target="_blank" class="btn btn-sm btn-outline-primary mb-1">
+                                    <i class="fas fa-file-pdf"></i> <?= ucwords(str_replace('_', ' ', $attachment['file_type'])) ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
             </div>
-        <?php }
-        } else { ?>
-            <div class="input-group mb-2 member-input">
-                <select name="members[]" class="form-select" required>
-                    <option value="" disabled selected>Select Member</option>
-                    <?php foreach ($employees as $emp):
-                        $fullName = $emp['firstname'] . ' ' . $emp['lastname'];
-                    ?>
-                        <option value="<?= htmlspecialchars($fullName) ?>"><?= htmlspecialchars($fullName) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        <?php } ?>
-    </div>
-    <!-- + button is now OUTSIDE the container -->
-    <button class="btn btn-success btn-sm mt-1 add-member-modal" type="button" data-research-id="<?= $research['id'] ?>">
-        + Add Member
-    </button>
-</div>
-                                                                        <div class="mb-3">
-                                                                            <label>Start Date:</label>
-                                                                            <input type="date" name="startDate" class="form-control"
-                                                                                value="<?= htmlspecialchars($research['startDate']) ?>">
-                                                                        </div>
-                                                                        <div class="mb-3">
-                                                                            <label>End Date:</label>
-                                                                            <input type="date" name="endDate" class="form-control"
-                                                                                value="<?= htmlspecialchars($research['endDate']) ?>">
-                                                                        </div>
-                                                                        <div class="mb-3">
-    <label>Upload Revised PDF:</label>
-    <input type="file" name="revised_pdf" class="form-control" accept="application/pdf" id="revised_pdf_<?= $research['id'] ?>">
-    <?php if (!empty($research['revised_pdf'])): ?>
-        <small class="text-muted">Current: <a href="research/<?= htmlspecialchars($research['revised_pdf']) ?>" target="_blank">View PDF</a></small>
-        <input type="hidden" name="has_existing_pdf" value="1">
-    <?php else: ?>
-        <small class="text-danger">* PDF file is required</small>
-        <input type="hidden" name="has_existing_pdf" value="0">
-    <?php endif; ?>
-</div>
-                                                                    </div>
-                                                                    <div class="modal-footer">
-                                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                                        <button type="submit" class="btn btn-success">Resubmit to Section Head</button>
-                                                                    </div>
-                                                                </div>
-                                                            </form>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            <?php endif; ?>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
+            
+        <?php elseif ($research['research_type'] === 'project' && $research['program_id']): ?>
+            <!-- PROJECT ROW (similar to program but simpler) -->
+            <?php 
+            $programDetails = $db->getProgramDetails($research['program_id']);
+            $project = $programDetails['projects'][0] ?? null;
+            $studyCount = $project ? count($project['studies'] ?? []) : 0;
+            ?>
+            <tr class="table-info">
+                <td>
+                    <strong><i class="fas fa-project-diagram"></i> PROJECT:</strong> 
+                    <?= htmlspecialchars($research['title']) ?>
+                    <br>
+                    <small class="text-muted"><?= $studyCount ?> Study(ies)</small>
+                </td>
+                <td><?= htmlspecialchars($research['team_leader']) ?></td>
+                <td colspan="3">
+                    <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#projectModal<?= $research['id'] ?>">
+                        <i class="fas fa-eye"></i> View Details
+                    </button>
+                </td>
+                <td>-</td>
+                <td><span class="badge bg-warning">Pending</span></td>
+                <td><?= htmlspecialchars($research['decided_by']) ?></td>
+                <td><?= $project['studies'][0]['section'] ?? 'Multiple' ?></td>
+                <?php if ($type_id == 2): ?>
+                    <td>
+                        <!-- Same action buttons as program -->
+                        <form method="POST" class="d-inline mb-1">
+                            <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                            <button type="submit" name="update_status" value="2" class="btn btn-success btn-sm">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                        </form><br>
+                        <button type="button" class="btn btn-warning btn-sm mb-1" data-bs-toggle="modal" data-bs-target="#reviseModal<?= $research['id'] ?>">
+                            <i class="fas fa-edit"></i> Revise
+                        </button><br>
+                        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#cancelModal<?= $research['id'] ?>">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                        <!-- Modals same as above -->
+                    </td>
+                <?php endif; ?>
+            </tr>
+            
+            <!-- Project Modal (simpler version of program modal) -->
+            
+        <?php else: ?>
+            <!-- REGULAR STUDY ROW (YOUR EXISTING CODE) -->
+            <tr>
+                <td><?= htmlspecialchars($research['title']) ?></td>
+                <td><?= htmlspecialchars($research['team_leader']) ?></td>
+                <td><?= htmlspecialchars($research['member']) ?></td>
+                <td><?= htmlspecialchars($research['startDate']) ?></td>
+                <td><?= htmlspecialchars($research['endDate']) ?></td>
+                <td>
+                    <?php if (!empty($research['filePath'])): ?>
+                        <a href="research/<?= htmlspecialchars($research['filePath']) ?>" target="_blank">Original PDF</a>
+                    <?php else: ?> N/A <?php endif; ?>
+
+                    <?php if (!empty($research['revised_pdf'])): ?>
+                        <br>
+                        <a href="revised_research/<?= htmlspecialchars($research['revised_pdf']) ?>" target="_blank">Revised PDF</a>
+                    <?php endif; ?>
+                </td>
+
+                <td>
+                    <?php if (!empty($research['compliance'])): ?>
+                        <a href="compliance/<?= htmlspecialchars($research['compliance']) ?>" target="_blank">View Compliance</a>
+                    <?php else: ?> N/A <?php endif; ?>
+                </td>
+                <td>
+                    <span class="badge bg-warning">Pending</span>
+                </td>
+                <td><?= htmlspecialchars($research['decided_by']) ?></td>
+                <td><?= htmlspecialchars($research['type_name']) ?></td>
+
+                <?php if ($type_id == 2): ?>
+                    <!-- YOUR EXISTING ACTION BUTTONS AND MODALS -->
+                    <td>
+                        <form method="POST" class="d-inline mb-1">
+                            <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                            <button type="submit" name="update_status" value="2" class="btn btn-success btn-sm">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                        </form><br>
+                        
+                        <button type="button" class="btn btn-warning btn-sm mb-1" data-bs-toggle="modal" data-bs-target="#reviseModal<?= $research['id'] ?>">
+                            <i class="fas fa-edit"></i> Revise
+                        </button><br>
+                        
+                        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#cancelModal<?= $research['id'] ?>">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+
+                        <!-- YOUR EXISTING MODALS -->
+                        <div class="modal fade" id="reviseModal<?= $research['id'] ?>" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="POST" enctype="multipart/form-data" class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Revise Research</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                                        <input type="hidden" name="update_status" value="3">
+                                        <div class="mb-3">
+                                            <label>Comment (Required)</label>
+                                            <textarea class="form-control" name="comment" rows="3" required></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label>Upload Compliance PDF (Required)</label>
+                                            <input type="file" class="form-control" name="compliance" accept="application/pdf" required>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                        <button type="submit" class="btn btn-warning">Submit Revision</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        
+                        <div class="modal fade" id="cancelModal<?= $research['id'] ?>" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="POST" class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Cancel Research</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <input type="hidden" name="research_id" value="<?= $research['id'] ?>">
+                                        <input type="hidden" name="cancel_research" value="1">
+                                        <div class="mb-3">
+                                            <label>Reason for Cancellation (Required)</label>
+                                            <textarea class="form-control" name="cancel_comment" rows="3" required placeholder="Explain why this research is being cancelled..."></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                        <button type="submit" class="btn btn-danger">Cancel Research</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </td>
+                <?php endif; ?>
+            </tr>
+        <?php endif; ?>
+    <?php endforeach; ?>
+</tbody>
                             </table>
                         </div>
                     </div>

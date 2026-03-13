@@ -7,18 +7,26 @@ $type_id = $_SESSION['type_id'] ?? 0;
             <div class="nav">
                 <div class="sb-sidenav-menu-heading">Core</div>
                 <a class="nav-link" href="dashboard.php">
-                    <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
+                    <div class="sb-nav-link-icon"><i class="fas fa-chart-line"></i></div>
                     Dashboard
                 </a>
 
                 <div class="sb-sidenav-menu-heading">Research Management</div>
 
-                <?php if ($type_id == 1): ?>
-                    <a class="nav-link" href="upload.php">
-                        <div class="sb-nav-link-icon"><i class="fas fa-upload text-primary"></i></div>
-                        Upload Research
-                    </a>
-                <?php endif; ?>
+      <?php if ($type_id == 1): ?>
+    <a class="nav-link" href="upload_study.php">
+        <div class="sb-nav-link-icon"><i class="fas fa-upload text-primary"></i></div>
+        Upload Study
+    </a>
+    <a class="nav-link" href="upload_project.php">
+        <div class="sb-nav-link-icon"><i class="fas fa-project-diagram text-info"></i></div>
+        Upload Project
+    </a>
+    <a class="nav-link" href="upload_program.php">
+        <div class="sb-nav-link-icon"><i class="fas fa-folder-plus text-success"></i></div>
+        Upload Program
+    </a>
+<?php endif; ?>
 
                 <?php if (in_array($type_id, [1, 2, 3, 4])): ?>
                     <a class="nav-link" href="pending.php">

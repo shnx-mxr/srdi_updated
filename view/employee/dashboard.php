@@ -48,26 +48,13 @@ $bgColors = [
     'published' => 'primary'
 ];
 
-// Determine which research to fetch
-if ($type_id == 1) {
-    $statusCountsRaw = $db->getResearchStatusCounts($session_user_id);
-    $allResearch = $db->getAllResearch($session_user_id);
-    $monthlyCounts = $db->getMonthlyResearchCounts(date('Y'), $session_user_id);
-} else {
-    $statusCountsRaw = $db->getResearchStatusCounts();
-    $allResearch = $db->getAllResearch();
-    $monthlyCounts = $db->getMonthlyResearchCounts(date('Y'));
-}
-// Determine which research to fetch
-if ($type_id == 1) {
-    $statusCountsRaw = $db->getResearchStatusCounts($session_user_id);
-    $allResearch = $db->getAllResearch($session_user_id);
-    $monthlyCounts = $db->getMonthlyResearchCounts(date('Y'), $session_user_id);
-} else {
-    $statusCountsRaw = $db->getResearchStatusCounts();
-    $allResearch = $db->getAllResearch();
-    $monthlyCounts = $db->getMonthlyResearchCounts(date('Y'));
-}
+// Get branch from session
+$branch = $_SESSION['branch'] ?? null;
+
+// Determine which research to fetch based on role
+$statusCountsRaw = $db->getResearchStatusCounts($session_user_id, $type_id, $branch);
+$allResearch = $db->getAllResearch($session_user_id, $type_id, $branch);
+$monthlyCounts = $db->getMonthlyResearchCounts(date('Y'), $session_user_id, $type_id, $branch);
 
 // 👇 ADD THESE LINES HERE (PAGINATION SETTINGS)
 $itemsPerPage = 10;
@@ -92,7 +79,8 @@ foreach ($statusMap as $id => $name) {
 $monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 $monthlyData = [];
 for ($i = 1; $i <= 12; $i++) {
-    $monthlyData[] = $monthlyCounts[$i] ?? 0;
+    // Always include all 12 months, use 0 if no data
+    $monthlyData[] = isset($monthlyCounts[$i]) ? (int)$monthlyCounts[$i] : 0;
 }
 
 // Research type mapping
@@ -108,14 +96,49 @@ $typeNames = [1 => 'Mulberry', 2 => 'Post Cocoon', 3 => 'Silkworm'];
         <div id="layoutSidenav_content">
             <main>
                 <div class="container-fluid px-4">
-                    <h1 class="mt-4">Dashboard</h1>
+                 <div class="d-flex align-items-center justify-content-between mt-4 position-relative mb-2">
+    <h1 class="fw-bold mb-0 position-relative d-inline-block">
+        Dashboard
+        <span class="position-absolute start-0 bottom-0 w-50" style="height:4px;background:#0d6efd;border-radius:2px"></span>
+    </h1>
+    <span class="text-muted small ms-3">Your overview of research submissions</span>
+    
+</div>
+<hr>
                     <ol class="breadcrumb mb-4">
 <li class="breadcrumb-item active">
     Hi, <strong><?= htmlspecialchars($typeName . ' ' . $cleanFullname) ?></strong>!
 </li>
 
                     </ol>
+<?php
+// Get program/study counts
+$programCount = 0;
+$projectCount = 0;
+$studyCount = 0;
+foreach ($researchList as $r) {
+    $researchType = $r['research_type'] ?? 'study'; // Default to study if column doesn't exist
+    if ($researchType === 'program') {
+        $programCount++;
+    } elseif ($researchType === 'project') {
+        $projectCount++;
+    } else {
+        $studyCount++;
+    }
+}
+?>
 
+<div class="alert alert-info">
+    <strong>Research Overview:</strong> 
+    <?= $programCount ?> Program(s), 
+    <?= $projectCount ?> Project(s), 
+    <?= $studyCount ?> Individual Study(ies)
+</div>
+
+<div class="alert alert-info">
+    <strong>Research Overview:</strong> 
+    <?= $programCount ?> Program(s), <?= $studyCount ?> Individual Study(ies)
+</div>
                     <!-- Status Cards -->
                     <div class="row">
                         <?php foreach ($statusCounts as $key => $count):

@@ -74,7 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <?php include 'partials/sidebar.php'; ?>
         <div id="layoutSidenav_content">
             <main class="container-fluid px-4">
-                <h1 class="mt-4">Upload Research</h1>
+        <div class="d-flex align-items-center justify-content-between my-4">
+    <h1 class="fw-semibold mb-0">Upload Research</h1>
+    <span class="text-muted small">Submit new research for review and processing</span>
+</div>
+<hr class="mt-2 mb-4">
+
 
                 <!-- Upload Form -->
                 <div class="card mb-4">

@@ -396,7 +396,7 @@ if (isset($_POST['submit'])) {
         <div class="left-panel">
             <div class="branding">
                 <div class="logo-container">
-                    <img src="https://www.dmmmsu.edu.ph/wp-content/uploads/2019/06/SRDI-Logo.jpg" class="srdi-logo" alt="DMMMSU SRDI Logo">
+                    <img src="https://www.dmmmsu.edu.ph/wp-content/uploads/2020/11/srdi_LOGO-20200130-1024x1024.png" class="srdi-logo" alt="DMMMSU SRDI Logo">
                 </div>
                 <h1>DMMMSU SRDI</h1>
                 <p>Research Documents Tracking System</p>

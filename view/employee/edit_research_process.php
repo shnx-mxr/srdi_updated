@@ -24,8 +24,8 @@ $member = implode(", ", $membersArray);
 
         $baseName = preg_replace("/[^a-zA-Z0-9_-]/", "_", pathinfo($_FILES['revised_pdf']['name'], PATHINFO_FILENAME));
         $revised_pdf_filename = $baseName . '_' . date('Ymd_His') . '.pdf';
-        $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/srdi_system_v1/view/employee/research/';
-        
+        // $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/srdi_system_v1/view/employee/research/';
+        $uploadDir = __DIR__ . '/research/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
